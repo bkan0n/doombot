@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import decimal
+import logging
 import re
 import typing
 
@@ -15,6 +16,8 @@ from utils import DoomEmbed
 
 if typing.TYPE_CHECKING:
     from core import DoomItx
+
+log = logging.getLogger(__name__)
 
 
 URL_REGEX = re.compile(
@@ -61,9 +64,13 @@ class MapLevelTransformer(app_commands.Transformer):
 
     async def autocomplete(self, itx: DoomItx, value: str) -> list[app_commands.Choice[str]]:
         assert itx.client.map_cache
+        if getattr(itx.namespace, "map_code", None):
+            map_code = itx.namespace.map_code.upper()
+        else:
+            map_code = ""
         return await cogs.autocomplete(
             value,
-            (itx.client.map_cache.get(itx.namespace.map_code.upper(), {})).get("choices", None),
+            (itx.client.map_cache.get(map_code, {})).get("choices", None),
         )
 
 

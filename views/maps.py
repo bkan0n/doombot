@@ -49,7 +49,7 @@ all_map_constants = [
     MapMetadata("Hanamura", discord.Color.from_str("#EF72A3")),
     MapMetadata("Havana", discord.Color.from_str("#00D45B")),
     MapMetadata("Hollywood", discord.Color.from_str("#FFFFFF")),
-    MapMetadata("Horizon Lunar Colony ", discord.Color.from_str("#000000")),
+    MapMetadata("Horizon Lunar Colony", discord.Color.from_str("#000000")),
     MapMetadata("Ilios", discord.Color.from_str("#008FDF")),
     MapMetadata("Junkertown", discord.Color.from_str("#EC9D00")),
     MapMetadata("Kanezaka", discord.Color.from_str("#DF3A4F")),
@@ -83,6 +83,7 @@ all_map_constants = [
     MapMetadata("New Junk City", discord.Color.from_str("#EC9D00")),
     MapMetadata("Samoa", discord.Color.from_str("#F9FF57")),
     MapMetadata("Hanaoka", discord.Color.from_str("#EF72A3")),
+    MapMetadata("Runasapi", discord.Color.from_str("#32AAE1")),
 ]
 
 MAP_DATA: dict[str, MapMetadata] = {const.NAME: const for const in all_map_constants}
@@ -133,8 +134,8 @@ class MapSubmit(discord.ui.Modal, title="MapSubmit"):
                 f"`  Map ` {self.data['map_name']}\n"
                 f"` Type ` {', '.join(map_types)}\n" + description
             ),
-            color=MAP_DATA.get(self.data["map_name"], discord.Color.from_str("#000000")).COLOR,
-            image=MAP_DATA.get(self.data["map_name"], None).IMAGE_URL,
+            color=getattr(MAP_DATA.get(self.data["map_name"], {}), "COLOR", discord.Color.from_str("#000000")),
+            image=getattr(MAP_DATA.get(self.data["map_name"], None), "IMAGE_URL", None),
             thumbnail=itx.client.user.display_avatar.url,
         )
         embed.add_field(

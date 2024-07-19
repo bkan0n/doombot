@@ -36,7 +36,7 @@ class TournamentSubmissions(commands.Cog):
     async def get_tournament_id(self) -> int:
         tournament_id_if_exists = self.bot.current_tournament and self.bot.current_tournament.id
         query = "SELECT id FROM tournament WHERE active = TRUE;"
-        fetch_id_if_needed = self.bot.database.fetchval(query)
+        fetch_id_if_needed = await self.bot.database.fetchval(query)
         return tournament_id_if_exists or await fetch_id_if_needed
 
     async def get_old_record(self, user_id: int, category: Category, tournament_id: int):

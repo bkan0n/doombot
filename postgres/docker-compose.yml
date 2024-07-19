@@ -5,6 +5,8 @@ services:
     container_name: doom-postgres
     build: .
     restart: unless-stopped
+    ports:
+      - 5432:5432
     volumes:
       - "$HOME/doom-postgres/:/var/lib/postgresql/data"
     environment:
@@ -13,41 +15,15 @@ services:
     networks:
       - doom-network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready" ]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  dbgate:
-    image: dbgate/dbgate
-    restart: always
-    volumes:
-      - dbgate-data:/root/.dbgate
-    environment:
-      CONNECTIONS: PSQL
-      LABEL_PSQL: PostgreSQL - Doom
-      SERVER_PSQL: db
-      PASSWORD_MODE_PSQL: askUser
-      PORT_PSQL: 5432
-      ENGINE_PSQL: postgres@dbgate-plugin-postgres
-    networks:
-      - doom-network
-      - contabo_network
-
-  webdb:
-      image: webdb/app
-      restart: always
-      volumes:
-          - "$HOME/.webdb:/usr/src/app/static/version"
-      environment:
-        - SCAN_HOSTS=db
-      networks:
-        - doom-network
-        - contabo_network
-
   backup:
     image: eeshugerman/postgres-backup-s3:15
     container_name: pg-backup-utility
+    restart: unless-stopped
     environment:
       SCHEDULE: '@weekly'     # optional
       BACKUP_KEEP_DAYS: 7     # optional

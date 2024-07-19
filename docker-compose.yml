@@ -1,12 +1,8 @@
 services:
   bot:
-    logging:
-      driver: syslog
-      options:
-        syslog-format: "rfc5424"
-        syslog-address: "${LOGGING_URL}"
     container_name: doom-bot
     build: .
+    restart: unless-stopped
     environment:
       - TOKEN=${TOKEN}
       - PSQL_PASSWORD=${PSQL_PASSWORD}

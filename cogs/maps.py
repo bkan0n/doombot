@@ -39,6 +39,32 @@ class Maps(commands.Cog):
         parent=_map_maker,
     )
 
+    _edit = app_commands.Group(
+        name="edit",
+        description="Map code, map name, etc.",
+        guild_ids=[utils.GUILD_ID],
+        parent=_map_maker,
+    )
+
+    @_edit.command(
+        name="code",
+        description="Edit your map code.",
+    )
+    async def edit_map_code(
+        self,
+        itx: DoomItx,
+        old_map_code: app_commands.Transform[str, utils.MapCodeAutoTransformer],
+        new_map_code: app_commands.Transform[int, utils.MapCodeTransformer],
+    ) -> None:
+        await itx.response.defer(ephemeral=True)
+        query = "UPDATE maps SET map_code = $1 WHERE map_code = $2"
+        await itx.client.database.execute(
+            query,
+            old_map_code,
+            new_map_code,
+        )
+        await itx.edit_original_response(content=(f"Updated {old_map_code} to {new_map_code}."))
+
     @_creator.command(
         **utils.remove_creator,
     )

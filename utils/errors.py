@@ -147,7 +147,7 @@ async def on_app_command_error(interaction: DoomItx, error: app_commands.errors.
             embed=embed,
         )
 
-        channel = interaction.client.get_channel(849878847310528523)
+        channel = interaction.client.get_channel(1246119507689214093)
         assert interaction.command
         command_name = f"**Command:** `{interaction.command.name}`\n"
         channel_name = f"**Channel:** `{interaction.channel}`\n"

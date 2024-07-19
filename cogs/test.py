@@ -242,6 +242,7 @@ class Test(commands.Cog):
     # @app_commands.describe(user=_T("The user to bonk."))
     async def bonk(self, interaction: DoomItx, user: discord.User):
         await interaction.response.send_message(f":hammer: {user.mention}", ephemeral=True)
+        await interaction.response.send_message
 
 
 async def setup(bot: core.Doom):

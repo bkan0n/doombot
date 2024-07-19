@@ -23,8 +23,8 @@ with open("assets/emoji-data.json", "r", encoding="utf8") as f:
 class Personal(commands.Cog):
     length = 0
 
-    async def cog_check(self, ctx: DoomCtx) -> bool:
-        return ctx.channel.id == 882243150419197952 or ctx.guild.id == 968553235239559239  # Spam-friendly
+    # async def cog_check(self, ctx: DoomCtx) -> bool:
+    #     return ctx.channel.id == 882243150419197952 or ctx.guild.id == 968553235239559239  # Spam-friendly
 
     @commands.command()
     async def joe_army(self, ctx: DoomCtx):
