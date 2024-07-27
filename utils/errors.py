@@ -136,6 +136,8 @@ async def on_app_command_error(interaction: DoomItx, error: app_commands.errors.
         )
         await _respond(embed, interaction)
         await utils.delete_interaction(interaction, minutes=seconds / 60)
+    elif isinstance(exception, app_commands.CheckFailure):
+        return
     else:
         edit = interaction.edit_original_response if interaction.response.is_done() else interaction.response.send_message
 
