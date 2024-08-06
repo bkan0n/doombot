@@ -21,6 +21,28 @@ with open("assets/emoji-data.json", "r", encoding="utf8") as f:
 
 
 class Personal(commands.Cog):
+    def __init__(self, bot: core.Doom):
+        self.bot = bot
+        self.bot.tree.add_command(
+            app_commands.ContextMenu(
+                name="translate",
+                callback=self.translate_context_callback,
+                guild_ids=[utils.GUILD_ID],
+            )
+        )
+
+    async def translate_context_callback(self, itx: DoomItx, message: discord.Message):
+        await itx.response.defer(ephemeral=True)
+
+        _l = itx.locale.value
+        if "-" in _l:
+            _l = _l.split("-")[0]
+
+        headers = {"sentence": message.content, "source": "en", "target": _l}
+        resp = await self.bot.session.get("https://translate.doom.pk/", headers=headers)
+        content = await resp.json()
+        await itx.edit_original_response(content=content["response"]["translated_text"])
+
     length = 0
 
     # async def cog_check(self, ctx: DoomCtx) -> bool:
