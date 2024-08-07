@@ -154,80 +154,120 @@ class Records(commands.Cog):
             raise utils.InvalidMapCodeError
 
         query = """
-        WITH all_tournament_records AS (SELECT user_id,
-                                               inserted_at,
-                                               record,
-                                               screenshot,
-                                               code                                                          as map_code,
-                                               level                                                         as level_name,
-                                               RANK() OVER (partition by user_id, code, level order by inserted_at) as latest
-                                        FROM tournament_records tr
-                                                 LEFT JOIN tournament_maps tm on tr.category = tm.category
-                                            AND tr.tournament_id = tm.id),
-             _tournament_records AS (SELECT user_id,
-                                            record,
-                                            screenshot,
-                                            map_code,
-                                            level_name,
-                                            inserted_at,
-                                            true as verified,
-                                            null as video
-                                     FROM all_tournament_records
-                                     WHERE latest = 1),
-             combined_t_all_records AS (SELECT user_id,
-                                               map_code,
-                                               level_name,
-                                               record,
-                                               screenshot,
-                                               video,
-                                               verified,
-                                               inserted_at,
-                                               true as tournament
-                                        FROM _tournament_records _tr
-                                        UNION
-                                        DISTINCT
-                                        (SELECT user_id,
-                                                map_code,
-                                                level_name,
-                                                record,
-                                                screenshot,
-                                                video,
-                                                verified,
-                                                inserted_at,
-                                                false as tournament
-                                         FROM records)),
-        final AS (SELECT *
-        FROM (SELECT u.nickname,
-                     level_name,
-                     record,
-                     screenshot,
-                     video,
-                     tournament,
-                     verified,
-                     r.map_code,
-                     m.map_name,
-                     rank() OVER (
-                         partition by r.map_code, r.user_id, level_name
-                         order by inserted_at DESC
-                         ) as latest,
-                     RANK() OVER (
-                         PARTITION BY level_name
-                         ORDER BY record
-                         )    rank_num
-              FROM combined_t_all_records r
-                       LEFT JOIN users u on r.user_id = u.user_id
-                       LEFT JOIN maps m on m.map_code = r.map_code) as ranks
-        WHERE map_code = $1
-          AND ($4::boolean IS FALSE OR video is not null)
-          AND ($2::boolean IS NOT FALSE OR rank_num = 1)
-          AND ($3::text IS NULL OR level_name = $3)
-          AND latest = 1
-          AND verified = TRUE
-        ORDER BY record, substr(level_name, 1, 5) <> 'Level', level_name)
-        SELECT nickname, level_name, record, screenshot, video, tournament, verified, map_code, map_name, latest, RANK() OVER (
-                         PARTITION BY level_name
-                         ORDER BY record
-                         )    rank_num FROM final;
+        WITH base_record_data AS (
+                SELECT
+                    coalesce(a.alias, u.nickname) AS alias,
+                    u.user_id,
+                    m.map_code,
+                    m.map_name,
+                    r.level_name,
+                    r.record,
+                    r.screenshot,
+                    r.video,
+                    r.verified,
+                    r.inserted_at,
+                    rank() OVER (
+                        PARTITION BY r.map_code, r.user_id, level_name ORDER BY inserted_at DESC
+                    ) AS latest
+            
+                FROM records r
+                LEFT JOIN alias a ON r.user_id = a.user_id AND a.primary = TRUE
+                LEFT JOIN users u ON r.user_id = u.user_id
+                LEFT JOIN maps m ON r.map_code = m.map_code
+                WHERE r.map_code = $1
+                    AND ($4::boolean IS FALSE OR r.video IS NOT NULL)
+                    AND ($3::text IS NULL OR r.level_name = $3)
+                    AND verified = TRUE
+            ), base_tournament_records AS (
+                SELECT
+                    coalesce(a.alias, u.nickname) AS alias,
+                    tr.user_id,
+                    tr.record,
+                    tr.screenshot,
+                    tr.inserted_at,
+                    tm.code as map_code,
+                    tm.level AS level_name,
+                    rank() OVER (
+                       PARTITION BY tr.user_id, tm.code, tm.level ORDER BY inserted_at DESC
+                    ) AS latest
+                FROM tournament_records tr
+                LEFT JOIN tournament_maps tm ON tr.category = tm.category AND tr.tournament_id = tm.id
+                LEFT JOIN alias a ON tr.user_id = a.user_id AND a."primary" = TRUE
+                LEFT JOIN users u ON tr.user_id = u.user_id
+                WHERE tm.code = $1
+                    AND ($3::text IS NULL OR tm.level = $3)
+            ), latest_base_records AS (
+                SELECT
+                    brd.alias,
+                    brd.user_id,
+                    brd.map_code,
+                    brd.map_name,
+                    brd.level_name,
+                    brd.record,
+                    brd.screenshot,
+                    brd.video,
+                    brd.verified,
+                    brd.inserted_at,
+                    FALSE AS tournament
+                FROM base_record_data brd
+                WHERE latest = 1
+            ), latest_base_tournament_records AS (
+                SELECT
+                    btr.alias,
+                    btr.user_id,
+                    btr.map_code,
+                    NULL AS map_name,
+                    btr.level_name,
+                    btr.record,
+                    btr.screenshot,
+                    NULL AS video,
+                    TRUE AS verified,
+                    btr.inserted_at,
+                    TRUE AS tournament
+                FROM base_tournament_records btr
+                WHERE latest = 1
+            ), all_records_union AS (
+                SELECT * FROM latest_base_tournament_records lbtr
+                UNION DISTINCT (
+                    SELECT * FROM latest_base_records
+                )
+            ), all_records_with_rank AS (
+                SELECT
+                    rank() OVER ( PARTITION BY alr.map_code, alr.level_name ORDER BY alr.record ) AS rank_num,
+                    *
+                FROM all_records_union alr
+            )
+            SELECT
+                arwr.alias AS nickname,
+                arwr.level_name,
+                arwr.record,
+                arwr.screenshot,
+                arwr.video,
+                arwr.tournament,
+                arwr.verified,
+                arwr.map_code,
+                arwr.map_name,
+                arwr.rank_num,
+                string_agg(coalesce(a.alias, u.nickname), ', ') AS creator_name
+            FROM all_records_with_rank arwr
+            LEFT JOIN map_creators mc ON arwr.map_code = mc.map_code
+            LEFT JOIN alias a ON mc.user_id = a.user_id AND a."primary" = TRUE
+            LEFT JOIN users u ON mc.user_id = u.user_id
+            WHERE
+                ($4::boolean IS FALSE OR video IS NOT NULL)
+                AND ($2::boolean IS NOT FALSE OR rank_num = 1)
+            GROUP BY
+                arwr.alias,
+                arwr.level_name,
+                arwr.record,
+                arwr.screenshot,
+                arwr.video,
+                arwr.tournament,
+                arwr.verified,
+                arwr.map_code,
+                arwr.map_name,
+                arwr.rank_num
+            ORDER BY map_code, level_name, record;
         """
 
         records = await itx.client.database.fetch(query, map_code, bool(level_name), level_name, verified)
