@@ -306,40 +306,60 @@ class Records(commands.Cog):
             user = itx.user
 
         query = """
-        SELECT *
-        FROM (SELECT u.nickname,
-                     r.user_id,
-                     level_name,
-                     record,
-                     screenshot,
-                     video,
-                     verified,
-                     r.map_code,
-                     r.channel_id,
-                     r.message_id,
-                     m.map_name,
-                     m.creators,
-                     rank() OVER (
-                         partition by r.map_code, level_name
-                         order by inserted_at DESC
-                         ) as latest,
-                     RANK() OVER (
-                         PARTITION BY level_name
-                         ORDER BY record
-                         ) rank_num
-              FROM records r
-                       LEFT JOIN users u on r.user_id = u.user_id
-                       LEFT JOIN (SELECT m.map_code,
-                                         m.map_name,
-                                         string_agg(distinct (nickname), ', ') as creators
-                                  FROM maps m
-                                           LEFT JOIN map_creators mc on m.map_code = mc.map_code
-                                           LEFT JOIN users u on mc.user_id = u.user_id
-                                  GROUP BY m.map_code, m.map_name) m
-                                 on m.map_code = r.map_code) as ranks
-        WHERE user_id = $1 AND ($2 IS FALSE OR rank_num = 1) AND latest = 1 AND verified = TRUE
-        ORDER BY map_code, substr(level_name, 1, 5) <> 'Level', level_name;
-
+            WITH base_personal_records AS (
+                SELECT
+                    coalesce(a.alias, u.nickname) AS nickname,
+                    r.user_id,
+                    r.level_name,
+                    r.record,
+                    r.screenshot,
+                    r.video,
+                    r.verified,
+                    r.map_code,
+                    rank() OVER (
+                        PARTITION BY r.map_code, level_name, r.user_id
+                        ORDER BY inserted_at DESC
+                    ) AS latest,
+                    RANK() OVER (
+                        PARTITION BY r.map_code, level_name
+                        ORDER BY record
+                    ) AS rank_num
+                FROM records r
+                LEFT JOIN alias a ON r.user_id = a.user_id AND a."primary" = TRUE
+                LEFT JOIN users u ON r.user_id = u.user_id
+                WHERE verified = TRUE
+            )
+            SELECT
+                bpr.nickname,
+                bpr.level_name,
+                bpr.record,
+                bpr.screenshot,
+                bpr.video,
+                bpr.verified,
+                bpr.map_code,
+                m.map_name,
+                bpr.rank_num,
+                string_agg(coalesce(a.alias, u.nickname), ', ') as creators
+            FROM base_personal_records bpr
+            LEFT JOIN maps m ON bpr.map_code = m.map_code
+            LEFT JOIN map_creators mc ON bpr.map_code = mc.map_code
+            LEFT JOIN alias a ON mc.user_id = a.user_id AND a."primary" = TRUE
+            LEFT JOIN users u ON mc.user_id = u.user_id
+            WHERE 
+                latest = 1 
+                AND bpr.user_id = $1
+                AND ($2 IS FALSE OR bpr.rank_num = 1)
+            GROUP BY
+                bpr.nickname,
+                bpr.level_name,
+                bpr.record,
+                bpr.screenshot,
+                bpr.video,
+                bpr.verified,
+                bpr.map_code,
+                m.map_name,
+                bpr.rank_num
+            ORDER BY map_code, substr(level_name, 1, 5) <> 'Level', level_name;
         """
         records = await itx.client.database.fetch(query, user.id, wr_only)
         if not records:
