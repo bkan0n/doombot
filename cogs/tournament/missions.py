@@ -202,6 +202,10 @@ class Missions(commands.Cog):
             raise NoMissionExists
 
         embed = missions_embed(self.pretty_missions(missions))
+        # TODO: add ending tourny time
+        end_time = self.bot.current_tournament.end_formatted
+        embed.description = embed.description + f"\n\nEnds:\n{end_time}"
+
         view = views.Confirm(itx)
         dropdown = TournamentRolesDropdown()
         view.add_item(dropdown)
