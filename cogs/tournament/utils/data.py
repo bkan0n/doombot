@@ -16,7 +16,7 @@ import utils
 from cogs.tournament.utils import Categories, Category, CategoryData, Rank
 from cogs.tournament.utils.utils import role_map
 
-EMBED_LIMIT = 5
+EMBED_LIMIT = 3
 
 rank_display = {
     Rank.GOLD: "<:gold:931317421862699118>",

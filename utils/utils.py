@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import logging
 import operator
 import re
 import typing
@@ -21,6 +22,8 @@ if typing.TYPE_CHECKING:
     from core import DoomItx
 
 CODE_VERIFICATION = re.compile(r"^[A-Z0-9]{4,6}$")
+
+log = logging.getLogger(__name__)
 
 
 async def delete_interaction(itx: DoomItx, *, minutes: int | float):
@@ -168,6 +171,17 @@ async def end_tournament(data: TournamentData):
         fp=r"DPK_Tournament.xlsx",
         filename=f"DPK_Tournament_{datetime.datetime.now().strftime('%d-%m-%Y')}.xlsx",
     )
-    await hof_thread.send(embeds=lb_embeds, file=file)
+    try:
+        await hof_thread.send(embeds=lb_embeds, file=file)
+    except discord.errors.HTTPException:
+        log_embed_data(lb_embeds)
+        await hof_thread.send(file=file)
 
     data.client.current_tournament = None
+
+
+def log_embed_data(embeds: list[discord.Embed]):
+    for embed in embeds:
+        log.info(embed.description)
+        if embed.description:
+            log.info(len(embed.description))
