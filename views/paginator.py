@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import logging
+from typing import TYPE_CHECKING, Any
 
 import discord
+from discord import Interaction
+from discord.ui import Item
 
 import utils
 
 if TYPE_CHECKING:
     from core import DoomItx
+
+log = logging.getLogger(__name__)
 
 
 class Paginator(discord.ui.View):
@@ -44,15 +49,10 @@ class Paginator(discord.ui.View):
             )
         await self.wait()
 
-    # @property
-    # def formatted_pages(self) -> list[discord.Embed | str]:
-    #     """The embeds with formatted footers to act as pages."""
-    #
-    #     pages = deepcopy(self.pages)
-    #     if not isinstance(pages[0], str):
-    #         for page in pages:
-    #             page.set_footer(text=f"({pages.index(page) + 1}/{len(pages)})")
-    #     return pages
+    async def on_error(self, interaction: Interaction, error: Exception, item: Item[Any], /) -> None:
+        log.info(interaction.user)
+        log.info(self.pages)
+        log.info(", ".join([len(x.description) for x in self.pages]))
 
     async def interaction_check(self, itx: DoomItx) -> bool:
         """
