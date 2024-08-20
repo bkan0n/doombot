@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 
 import aiohttp
@@ -14,6 +15,7 @@ async def main() -> None:
     It creates a bot instance and runs it.
     """
     discord.utils.setup_logging()
+    logging.getLogger("discord.gateway").setLevel(30)
     async with aiohttp.ClientSession() as session:
         async with database.DatabaseConnection(
             f"postgres://{os.environ['PSQL_USER']}:{os.environ['PSQL_PASSWORD']}@db/doom3"
