@@ -62,10 +62,11 @@ class Tags(discord.ext.commands.GroupCog, group_name=utils.tags["name"]):
 
 
 async def setup(bot: core.Doom):
-    await bot.add_cog(
-        Tags(bot),
-        guilds=[
-            discord.Object(id=utils.GUILD_ID),
-            discord.Object(id=195387617972322306),
-        ],
-    )
+    # await bot.add_cog(
+    #     Tags(bot),
+    #     guilds=[
+    #         discord.Object(id=utils.GUILD_ID),
+    #         discord.Object(id=195387617972322306),
+    #     ],
+    # )
+    ...
