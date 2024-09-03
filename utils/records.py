@@ -205,25 +205,34 @@ def pr_records_embed(
     embed_list = []
     embed = utils.DoomEmbed(title=title)
     description = ""
+    continuation_count = 1
     cur_code = f"{records[0]['map_name']} by {records[0]['creators']} ({records[0]['map_code']})"
     for i, record in enumerate(records):
         if cur_code != f"{record['map_name']} by {record['creators']} ({record['map_code']})":
             cur_code, description = _add_pr_field(cur_code, description, embed, record)
         if not record["video"]:
-            description += (
+            _description = (
                 f"┣ `Level` ***{record['level_name']}***\n"
                 f"┣ `Record` [{pretty_record(record['record'])}]"
                 f"({record['screenshot']}) "
                 f"{utils.HALF_VERIFIED}\n┃\n"
             )
+            if len(description) + len(_description) >= 1024:
+                cur_code, description = _add_pr_field(cur_code, description, embed, record)
+            description += _description
+
         else:
-            description += (
+            _description = (
                 f"┣ `Level` ***{record['level_name']}***\n"
                 f"┣ `Record` [{pretty_record(record['record'])}]"
                 f"({record['screenshot']})"
                 f"{utils.VERIFIED}\n "
                 f"┣ `Video` [Link]({record['video']})\n┃\n"
             )
+            if len(description) + len(_description) >= 1024:
+                cur_code, description = _add_pr_field(cur_code, description, embed, record)
+            description += _description
+
         if utils.split_nth_conditional(i, 9, records):
             cur_code, description = _add_pr_field(cur_code, description, embed, record)
             embed_list.append(embed)

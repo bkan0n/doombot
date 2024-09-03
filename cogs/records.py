@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import typing
 
 import discord
@@ -13,6 +14,8 @@ import views
 if typing.TYPE_CHECKING:
     import core
     from core import DoomItx
+
+log = logging.getLogger(__name__)
 
 
 class Records(commands.Cog):
