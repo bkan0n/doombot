@@ -91,7 +91,7 @@ MAP_DATA: dict[str, MapMetadata] = {const.NAME: const for const in all_map_const
 
 
 class MapSubmit(discord.ui.Modal, title="MapSubmit"):
-    desc = discord.ui.TextInput(label="Description", style=discord.TextStyle.paragraph, required=False)
+    desc = discord.ui.TextInput(label="Description", style=discord.TextStyle.paragraph, required=False, max_length=100)
     levels = discord.ui.TextInput(
         label="Level Names",
         style=discord.TextStyle.paragraph,
