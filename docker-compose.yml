@@ -1,5 +1,5 @@
 services:
-  bot:
+  doom-bot:
     container_name: doom-bot
     build: .
     restart: unless-stopped
@@ -8,8 +8,6 @@ services:
       - PSQL_PASSWORD=${PSQL_PASSWORD}
       - PSQL_USER=${PSQL_USER}
       - PSQL_HOST=${PSQL_HOST}
-      - PSQL_DATABASE=${PSQL_DATABASE}
-      - PSQL_PORT=${PSQL_PORT}
     networks:
       - doom-network
 

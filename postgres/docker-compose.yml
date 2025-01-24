@@ -1,28 +1,27 @@
 name: doom-postgres
 
 services:
-  db:
+  doom-postgres:
     container_name: doom-postgres
     build: .
     restart: unless-stopped
-    ports:
-      - 5432:5432
     volumes:
-      - "$HOME/doom-postgres/:/var/lib/postgresql/data"
+      - "/home/nebula/bkan0n/appdata/doom-postgres:/var/lib/postgresql/data"
     environment:
       - POSTGRES_PASSWORD=${PSQL_PASSWORD}
       - POSTGRES_USER=${PSQL_USER}
     networks:
       - doom-network
+      - caddy-network
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  backup:
+  doom-postgres-backup:
     image: eeshugerman/postgres-backup-s3:15
-    container_name: pg-backup-utility
+    container_name: doom-postgres-backup
     restart: unless-stopped
     environment:
       SCHEDULE: '@weekly'     # optional
@@ -33,7 +32,7 @@ services:
       S3_BUCKET: doom-backups
       S3_PREFIX: backups
       S3_ENDPOINT: ${S3_ENDPOINT}
-      POSTGRES_HOST: db
+      POSTGRES_HOST: doom-postgres
       POSTGRES_DATABASE: doom3
       POSTGRES_USER: ${PSQL_USER}
       POSTGRES_PASSWORD: ${PSQL_PASSWORD}
@@ -43,12 +42,8 @@ services:
     networks:
       - doom-network
 
-volumes:
-  dbgate-data:
-    driver: local
-
 networks:
   doom-network:
     external: true
-  contabo_network:
+  caddy-network:
     external: true
