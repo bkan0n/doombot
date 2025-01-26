@@ -14,7 +14,7 @@ async def main() -> None:
     discord.utils.setup_logging()
     logging.getLogger("discord.gateway").setLevel("WARNING")
     async with aiohttp.ClientSession() as session, database.DatabaseConnection(
-        f"postgres://{os.environ['PSQL_USER']}:{os.environ['PSQL_PASSWORD']}@db/doom3"
+        f"postgres://{os.environ['PSQL_USER']}:{os.environ['PSQL_PASSWORD']}@doom-postgres/doom3"
     ) as pool:
         assert pool is not None
         async with core.Doom() as bot:
