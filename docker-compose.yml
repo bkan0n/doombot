@@ -10,6 +10,9 @@ services:
       - PSQL_HOST=${PSQL_HOST}
     networks:
       - doom-network
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
 
 networks:
   doom-network:
