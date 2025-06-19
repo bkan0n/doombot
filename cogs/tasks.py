@@ -3,7 +3,6 @@ from __future__ import annotations
 import typing
 from logging import getLogger
 
-import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
@@ -55,6 +54,7 @@ class Tasks(commands.Cog):
 
     @tasks.loop(hours=24, count=1)
     async def cache_tournament(self):
+        await self.bot.wait_until_ready()
         logger.debug("Caching tournament...")
         query = """
             SELECT *
