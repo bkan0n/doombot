@@ -47,3 +47,6 @@ class Quotes(commands.Cog):
             message.content,
         )
         await itx.response.send_message(f"Added quote {res}")
+
+async def setup(bot: core.Doom):
+    await bot.add_cog(Quotes(bot))
