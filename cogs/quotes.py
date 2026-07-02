@@ -45,6 +45,7 @@ class Quotes(commands.Cog):
     @app_commands.command(name="quotelist", description="List of quotes available with /quote [id]")
     @app_commands.guilds(discord.Object(id=utils.GUILD_ID))
     async def quotelist(self, itx: DoomItx):
+        await itx.response.defer(ephemeral=True)
         query = "SELECT * FROM quotes ORDER BY id;"
         rows = await itx.client.pool.fetch(query)
         row_strings = [f"**{row['id']} - {row['username']}\n{row['content']}\n" for row in rows]
