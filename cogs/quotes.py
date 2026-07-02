@@ -48,7 +48,8 @@ class Quotes(commands.Cog):
         await itx.response.defer(ephemeral=True)
         query = "SELECT * FROM quotes ORDER BY id;"
         rows = await itx.client.pool.fetch(query)
-        row_strings = [f"**{row['id']} - {row['username']}\n{row['content']}\n" for row in rows]
+        es = discord.utils.escape_markdown
+        row_strings = [f"**{row['id']}** - {es(row['username'])}\n{row['content']}\n" for row in rows]
         chunks = discord.utils.as_chunks(row_strings, 10)
         embeds = [discord.Embed(title=f"Quote List", description="\n".join(chunk)) for chunk in chunks]
         await Paginator(embeds, itx.user).start(itx)
