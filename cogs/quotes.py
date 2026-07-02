@@ -7,6 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import utils
+from views import Paginator
 
 if typing.TYPE_CHECKING:
     import core
@@ -24,20 +25,33 @@ class Quotes(commands.Cog):
             )
         )
 
-    @commands.hybrid_command(name="quote", description="Get a quote.")
-    async def quote(self, ctx: DoomCtx, id: int | None = None):
+    @app_commands.command(name="quote", description="One of many quotes.")
+    @app_commands.describe(id="ID of the quote")
+    @app_commands.guilds(discord.Object(id=utils.GUILD_ID))
+    async def quote(self, itx: DoomItx, id: int | None = None):
         if id is None:
             query = "SELECT id, username, content FROM quotes ORDER BY RANDOM() LIMIT 1;"
-            res = await ctx.bot.pool.fetchrow(query)
+            res = await itx.client.pool.fetchrow(query)
         else:
             query = "SELECT * FROM quotes WHERE id = $1"
-            res = await ctx.bot.pool.fetchrow(query, id)
+            res = await itx.client.pool.fetchrow(query, id)
 
         if not res:
-            await ctx.send("There is no quote with this index!")
+            await itx.response.send_message("There is no quote with this index!")
             return
 
-        await ctx.send(f"Quote #{res['id']}: {res['username']}:\n{res['content']}")
+        await itx.response.send_message(f"Quote #{res['id']}: {res['username']}:\n{res['content']}")
+
+    @app_commands.command(name="quotelist", description="List of quotes available with /quote [id]")
+    @app_commands.guilds(discord.Object(id=utils.GUILD_ID))
+    async def quotelist(self, itx: DoomItx):
+        query = "SELECT * FROM quotes ORDER BY id;"
+        rows = await itx.client.pool.fetch(query)
+        row_strings = [f"**{row['id']} - {row['username']}\n{row['content']}\n" for row in rows]
+        chunks = discord.utils.as_chunks(row_strings, 10)
+        embeds = [discord.Embed(title=f"Quote List", description="\n".join(chunk)) for chunk in chunks]
+        await Paginator(embeds, itx.user).start(itx)
+
 
     async def add_quote(self, itx: DoomItx, message: discord.Message):
         query = "INSERT INTO quotes (username, content) VALUES ($1, $2) RETURNING id;"
