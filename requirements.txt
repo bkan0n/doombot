@@ -8,5 +8,4 @@ dateparser~=1.1.8
 XlsxWriter~=3.0.9
 Pillow~=9.5.0
 chat-exporter
-imgkit
 git+https://github.com/Rapptz/discord-ext-menus

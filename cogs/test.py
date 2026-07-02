@@ -7,7 +7,6 @@ import typing
 
 import chat_exporter
 import discord
-import imgkit
 from discord import app_commands
 from discord.app_commands import locale_str as _T
 from discord.ext import commands

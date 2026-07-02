@@ -2,8 +2,6 @@ FROM python:3.11
 
 WORKDIR /usr/src/app
 
-RUN apt-get update && apt-get install -y wkhtmltopdf
-
 # For safety reason, create an user with lower privileges than root and run from there
 RUN useradd -m -d /home/doom -s /bin/bash doom && \
     mkdir /usr/src/doom && \
