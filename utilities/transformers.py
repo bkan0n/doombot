@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import aiohttp
 from discord import app_commands
@@ -119,7 +119,7 @@ class MapLevelTransformer(app_commands.Transformer):
 
     async def autocomplete(
         self, itx: AkandeItx, current: str
-    ) -> list[Choice[str | int | float]] | list[Any]:
+    ) -> list[Choice[str | int | float]]:
         map_code = self._map_code(itx)
         if map_code is None:
             return []
