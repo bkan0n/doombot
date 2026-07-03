@@ -1,0 +1,17 @@
+guild = 195387617972322306
+
+[roles]
+staff = 1047262740315643925
+
+[channels.submission]
+new_maps = 856602254769782835
+verification_queue = 811467249100652586
+
+[channels.records]
+spr_records = 801496775390527548
+records = 856513618091049020
+top_records = 873412962981908500
+hall_of_fame = 931959281845157978
+
+[channels.tournament]
+submissions = 840408122181812225
