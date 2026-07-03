@@ -3,6 +3,7 @@ from . import (
     emojis,
     errors,
     transformers,
+    views,
 )
 
 __all__ = (
@@ -10,4 +11,5 @@ __all__ = (
     "emojis",
     "errors",
     "transformers",
+    "views",
 )
