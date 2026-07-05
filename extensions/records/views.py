@@ -271,7 +271,7 @@ class StarButton(ui.DynamicItem[ui.Button], template=r"records-star:(?P<id>[0-9]
     def __init__(self, message_id: int, count: int = 0) -> None:
         super().__init__(
             ui.Button(
-                style=discord.ButtonStyle.green,
+                style=discord.ButtonStyle.grey,
                 emoji=emojis.star_tier_emoji(count),
                 label=str(count),
                 custom_id=f"records-star:{message_id}",
