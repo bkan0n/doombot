@@ -14,7 +14,7 @@ from ._base import BaseCog
 if typing.TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from core import Akande, AkandeItx, AkandeCtx
+    from core import Akande, AkandeCtx, AkandeItx
     from database.services.misc import ColorRole
 
 
@@ -175,7 +175,6 @@ class RolesPanel(ui.LayoutView):
 
 
 class RolesCog(BaseCog, name="roles", description="Self-assign role panel."):
-
     @commands.command(name="roles-panel")
     @commands.guild_only()
     @commands.is_owner()
@@ -184,7 +183,7 @@ class RolesCog(BaseCog, name="roles", description="Self-assign role panel."):
         async with self.bot.acquire() as svc:
             colors = await svc.misc.fetch_color_roles()
         await ctx.send(view=RolesPanel(colors))
-    
+
     async def cog_load(self) -> None:
         self.bot.add_view(RolesPanel())
 

@@ -1,0 +1,136 @@
+name: Dev Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch, tag, or SHA) to deploy (defaults to main)"
+        required: false
+        default: "main"
+      services:
+        description: "Compose services to deploy, e.g. 'akande-db-dev' (defaults to all)"
+        required: false
+        default: ""
+  issue_comment:
+    types: [ created ]
+
+permissions:
+  pull-requests: write
+  deployments: write
+  contents: write
+  checks: read
+  statuses: read
+
+jobs:
+  resolve-ref:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'issue_comment' && github.event.issue.pull_request) }}
+    outputs:
+      ref: ${{ steps.set-ref.outputs.ref }}
+      deployment_id: ${{ steps.branch-deploy.outputs.deployment_id }}
+      continue: ${{ steps.branch-deploy.outputs.continue }}
+    steps:
+      - name: branch-deploy
+        id: branch-deploy
+        if: ${{ github.event_name == 'issue_comment' }}
+        uses: github/branch-deploy@v11
+        with:
+          trigger: ".deploy"
+          reaction: "eyes"
+          environment: "development"
+          stable_branch: "main"
+          environment_targets: "development"
+          admins: "tylovejoy"
+          skip_completing: "true"
+
+      - name: Resolve ref
+        id: set-ref
+        run: |
+          if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
+            echo "ref=${{ steps.branch-deploy.outputs.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  dev-deploy:
+    needs: [ resolve-ref ]
+    # Run if manually dispatched OR if this is a PR comment and branch-deploy says to continue
+    if: |
+      always() &&
+      (needs.resolve-ref.outputs.continue == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: development
+    concurrency:
+      group: dev-deploy
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve-ref.outputs.ref }}
+
+      - name: Update deployment status to in_progress
+        if: ${{ github.event_name == 'issue_comment' && needs.resolve-ref.outputs.deployment_id }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: '${{ needs.resolve-ref.outputs.deployment_id }}',
+              state: 'in_progress',
+              log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              description: 'Deploying to dev server...'
+            });
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_HOST_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_HOST_IP }} >> ~/.ssh/known_hosts
+
+      - name: Set up Docker context for dev
+        run: |
+          docker context create dev-server \
+            --docker "host=ssh://${{ secrets.SERVER_HOST_USER }}@${{ secrets.SERVER_HOST_IP }}" \
+            --description "Dev server context"
+          docker context use dev-server
+
+      - name: Deploy to dev server
+        run: docker compose -f docker-compose.dev.yml up -d --build ${{ inputs.services }}
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+
+      - name: Update deployment status to success
+        if: ${{ success() && github.event_name == 'issue_comment' && needs.resolve-ref.outputs.deployment_id }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: '${{ needs.resolve-ref.outputs.deployment_id }}',
+              state: 'success',
+              log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              description: 'Deployment completed successfully'
+            });
+
+      - name: Update deployment status to failure
+        if: ${{ failure() && github.event_name == 'issue_comment' && needs.resolve-ref.outputs.deployment_id }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: '${{ needs.resolve-ref.outputs.deployment_id }}',
+              state: 'failure',
+              log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              description: 'Deployment failed'
+            });

@@ -1,0 +1,13 @@
+.git
+.github
+.venv
+**/__pycache__/
+**/.DS_Store
+**/*.pyc
+tests/
+docs/
+backups/
+justfile
+Dockerfile
+.dockerignore
+docker-compose*.yml

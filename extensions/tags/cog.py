@@ -27,6 +27,7 @@ _MENTIONS = discord.AllowedMentions.none()
 async def _autocomplete_all(
     itx: AkandeItx, current: str
 ) -> list[app_commands.Choice[str]]:
+    assert itx.guild_id
     async with itx.client.acquire() as svc:
         names = await svc.tags.autocomplete_tags_with_aliases(
             itx.guild_id, current.lower()
@@ -37,6 +38,7 @@ async def _autocomplete_all(
 async def _autocomplete_originals(
     itx: AkandeItx, current: str
 ) -> list[app_commands.Choice[str]]:
+    assert itx.guild_id
     async with itx.client.acquire() as svc:
         names = await svc.tags.autocomplete_tags(itx.guild_id, current.lower())
     return [app_commands.Choice(name=n, value=n) for n in names]
@@ -45,6 +47,7 @@ async def _autocomplete_originals(
 async def _autocomplete_owned(
     itx: AkandeItx, current: str
 ) -> list[app_commands.Choice[str]]:
+    assert itx.guild_id
     async with itx.client.acquire() as svc:
         names = await svc.tags.autocomplete_owned_tags(
             itx.guild_id, itx.user.id, current.lower()
@@ -55,6 +58,7 @@ async def _autocomplete_owned(
 async def _autocomplete_owned_all(
     itx: AkandeItx, current: str
 ) -> list[app_commands.Choice[str]]:
+    assert itx.guild_id
     async with itx.client.acquire() as svc:
         names = await svc.tags.autocomplete_owned_tags_with_aliases(
             itx.guild_id, itx.user.id, current.lower()

@@ -1,0 +1,49 @@
+name: Lint
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_call:
+    inputs:
+      ref:
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to lint (defaults to triggering SHA)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --all-groups
+
+      - name: Ruff format
+        run: uv run ruff format --check .
+
+      - name: Ruff check
+        run: uv run ruff check .
+
+      - name: Basedpyright
+        run: uv run basedpyright
+
+      - name: SQL lint
+        run: uv run pylintsql lint .

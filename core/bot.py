@@ -43,16 +43,15 @@ def _generate_intents() -> discord.Intents:
     )
     return intents
 
-
 class Akande(commands.Bot):
     session: ClientSession
     config: Config
 
     def __init__(self, spec: SQLSpec, db_config: AsyncDatabaseConfig) -> None:
-        super().__init__(command_prefix="$", intents=_generate_intents())
+        env = "prod" if os.getenv("APP_ENVIRONMENT") == "production" else "dev"
+        super().__init__(command_prefix="?" if env == "prod" else "$", intents=_generate_intents())
         self._spec = spec
         self._db_config = db_config
-        env = "prod" if os.getenv("APP_ENVIRONMENT") == "production" else "dev"
         with open(f"configs/{env}.toml", "rb") as f:
             self.config = decode(f.read())
 

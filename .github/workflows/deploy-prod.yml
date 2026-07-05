@@ -1,0 +1,58 @@
+name: Prod Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      services:
+        description: "Compose services to deploy, e.g. 'akande-db' (defaults to all)"
+        required: false
+        default: ""
+  push:
+    branches: [ main ]
+
+concurrency:
+  group: prod-deploy
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    uses: ./.github/workflows/lint.yml
+    with:
+      ref: ${{ github.sha }}
+
+  tests:
+    uses: ./.github/workflows/tests.yml
+    with:
+      ref: ${{ github.sha }}
+
+  prod-deploy:
+    needs: [ lint, tests ]
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_HOST_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_HOST_IP }} >> ~/.ssh/known_hosts
+
+      - name: Set up Docker context for prod
+        run: |
+          docker context create prod-server \
+            --docker "host=ssh://${{ secrets.SERVER_HOST_USER }}@${{ secrets.SERVER_HOST_IP }}" \
+            --description "Prod server context"
+          docker context use prod-server
+
+      - name: Deploy to prod server
+        run: docker compose -f docker-compose.prod.yml up -d --build ${{ inputs.services }}
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}

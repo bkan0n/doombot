@@ -70,7 +70,7 @@ class MapService(Service):
             INSERT INTO map_levels (map_code, level)
             SELECT
               :map_code,
-              UNNEST(CAST(:levels AS TEXT []));
+              UNNEST(CAST(:levels AS TEXT [])) AS level;
         """
         await self._db.execute(query, map_code=map_code, levels=levels)
 

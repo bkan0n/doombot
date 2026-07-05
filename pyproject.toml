@@ -21,8 +21,8 @@ discord-py = { git = "https://github.com/rapptz/discord.py" }
 
 [dependency-groups]
 dev = [
+    "basedpyright>=1.39.9",
     "pylintsql>=0.0.9",
-    "pyright>=1.1.411",
     "pytest>=9.1.1",
     "ruff>=0.15.20",
 ]
@@ -41,6 +41,10 @@ exclude_rules = ["RF01", "RF02", "RF04", "ST06", "AM09"]
 param_style = "colon"
 # ":end" would otherwise render as the reserved keyword "end" and break parsing
 end = "NOW()"
+# ":limit" would otherwise render as "LIMIT limit" and break parsing
+limit = "1"
+# ":primary" would otherwise render as the reserved keyword "primary" and break parsing
+primary = "TRUE"
 
 [tool.sqlfluff.indentation]
 tab_space_size = 2

@@ -1,4 +1,3 @@
-import contextlib
 from typing import Literal
 
 import discord
@@ -7,11 +6,6 @@ from discord.ext import commands
 from core import Akande, AkandeCtx
 
 from ._base import BaseCog
-from .roles import RolesPanel
-
-# Synthetic star-vote user ids; top_records.user_id has no FK to users.
-_FAKE_VOTER_BASE = 10**17
-_SEED_RECORD_TIME = 42.42
 
 
 class HousekeepingCog(BaseCog):
