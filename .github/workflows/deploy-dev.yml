@@ -99,7 +99,7 @@ jobs:
           docker context use dev-server
 
       - name: Deploy to dev server
-        run: docker compose -f docker-compose.dev.yml up -d --build ${{ inputs.services }}
+        run: docker compose -f docker-compose.dev.yml up -d --build --no-deps --force-recreate ${{ inputs.services }}
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
