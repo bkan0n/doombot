@@ -29,7 +29,8 @@ dev = [
 
 [tool.basedpyright]
 typeCheckingMode = "basic"
-exclude = ["tests"]
+# Setting exclude replaces the defaults, so restate them (.venv is covered by "**/.*")
+exclude = ["**/__pycache__", "**/.*", "backups", "tests"]
 
 [tool.ruff]
 extend-exclude = ["tests"]
