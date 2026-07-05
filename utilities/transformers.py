@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import datetime
 import re
 from typing import TYPE_CHECKING
 
 import aiohttp
+import dateparser
 from discord import app_commands
 from discord.app_commands import Choice
 
@@ -15,12 +17,15 @@ if TYPE_CHECKING:
 __all__ = (
     "CodeSubmissionTransformer",
     "CodeTransformer",
+    "DateTransformer",
     "MapLevelTransformer",
     "MapNameTransformer",
     "MapTypeTransformer",
     "RecordTransformer",
+    "SeasonTransformer",
     "URLTransformer",
     "UserTransformer",
+    "parse_future_date",
 )
 
 CODE_VERIFICATION = re.compile(r"^[A-Z0-9]{4,6}$")
@@ -163,12 +168,65 @@ def time_convert(time_str: str) -> float:
     return sign * total
 
 
+def parse_future_date(value: str) -> datetime.datetime:
+    """Natural-language date -> aware UTC datetime, preferring the future.
+
+    tournament.start/end are timestamptz; everything downstream (asyncpg,
+    sleep_until, format_dt) expects aware UTC.
+    """
+    parsed = dateparser.parse(
+        value,
+        settings={
+            "PREFER_DATES_FROM": "future",
+            "RETURN_AS_TIMEZONE_AWARE": True,
+            "TO_TIMEZONE": "UTC",
+        },
+    )
+    if parsed is None:
+        raise ValueError(f"Unparseable date: {value!r}")
+    return parsed
+
+
+class DateTransformer(app_commands.Transformer):
+    async def transform(self, itx: AkandeItx, value: str) -> datetime.datetime:
+        try:
+            return parse_future_date(value)
+        except ValueError:
+            raise UserFacingError(
+                "Could not understand that date. Try `tomorrow 18:00` or "
+                "`2026-07-10 15:00 UTC`."
+            ) from None
+
+
 class RecordTransformer(app_commands.Transformer):
     async def transform(self, itx: AkandeItx, value: str) -> float:
         try:
             return time_convert(value)
         except ValueError:
             raise UserFacingError("Record is in an incorrect format.") from None
+
+
+class SeasonTransformer(app_commands.Transformer):
+    """A tournament season number, chosen by number or fuzzy name match."""
+
+    async def transform(self, itx: AkandeItx, value: str) -> int:
+        if value.isdigit():
+            return int(value)
+        async with itx.client.acquire() as svc:
+            seasons = await svc.tournament.search_season_names(value)
+        if not seasons:
+            raise UserFacingError("No matching season found.")
+        return seasons[0].number
+
+    async def autocomplete(
+        self, itx: AkandeItx, current: str
+    ) -> list[Choice[str | int | float]]:
+        async with itx.client.acquire() as svc:
+            seasons = await svc.tournament.search_season_names(current)
+        return [
+            app_commands.Choice(name=season.name[:100], value=str(season.number))
+            for season in seasons
+        ]
 
 
 class URLTransformer(app_commands.Transformer):

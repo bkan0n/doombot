@@ -75,13 +75,14 @@ class MiscService(Service):
         """
         await self._db.execute(query, value=value)
 
-    async def fetch_insults(self) -> list[str]:
+    async def fetch_random_insult(self) -> str | None:
         query = """--sql
             SELECT value
-            FROM insults;
+            FROM insults
+            ORDER BY RANDOM()
+            LIMIT 1;
         """
-        rows = await self._db.select(query)
-        return [row["value"] for row in rows]
+        return await self._db.select_value_or_none(query)
 
     async def add_keep_alive(self, thread_id: int) -> None:
         query = """--sql

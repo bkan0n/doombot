@@ -1,0 +1,23 @@
+name: akande-ogundimu
+
+services:
+  db:
+    image: postgres:15.4
+    container_name: akande-postgres-local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:15432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: doom3
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d doom3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

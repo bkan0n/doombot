@@ -34,18 +34,13 @@ class TournamentLeaderboardEntry(msgspec.Struct, frozen=True):
     date_rank: int
 
 
-class MapContestSubmission(msgspec.Struct, frozen=True):
-    map_code: str
-    user_id: int
-
-
 class Mission(msgspec.Struct, frozen=True):
     id: int
     type: str
     target: float | None
     difficulty: str
     category: str
-    extra_target: float | None
+    extra_target: str | None
 
 
 class MissionWithMap(msgspec.Struct, frozen=True):
@@ -54,7 +49,7 @@ class MissionWithMap(msgspec.Struct, frozen=True):
     target: float | None
     difficulty: str
     category: str
-    extra_target: float | None
+    extra_target: str | None
     code: str | None
     level: str | None
     creator: str | None
@@ -63,7 +58,7 @@ class MissionWithMap(msgspec.Struct, frozen=True):
 class GeneralMission(msgspec.Struct, frozen=True):
     type: str
     target: float | None
-    extra_target: float | None
+    extra_target: str | None
 
 
 class Season(msgspec.Struct, frozen=True):
@@ -152,6 +147,15 @@ class TournamentService(Service):
             WHERE t.id = (SELECT MAX(id) FROM tournament);
         """
         return await self._db.select_one_or_none(query, schema_type=TournamentInfo)
+
+    async def end_tournament_now(self, tournament_id: int) -> None:
+        """Pull the end time up to now; the scheduler fires the end transition."""
+        query = """--sql
+            UPDATE tournament
+            SET "end" = NOW()
+            WHERE id = :tournament_id;
+        """
+        await self._db.execute(query, tournament_id=tournament_id)
 
     async def fetch_tournament_maps(self, tournament_id: int) -> list[TournamentMap]:
         query = """--sql
@@ -278,55 +282,6 @@ class TournamentService(Service):
             schema_type=TournamentLeaderboardEntry,
         )
 
-    async def has_map_contest_submission(
-        self, user_id: int, tournament_id: int
-    ) -> bool:
-        query = """--sql
-            SELECT
-              EXISTS(
-                SELECT 1
-                FROM map_contest
-                WHERE user_id = :user_id AND tournament_id = :tournament_id
-              );
-        """
-        return await self._db.select_value(
-            query, user_id=user_id, tournament_id=tournament_id
-        )
-
-    async def upsert_map_contest_submission(
-        self, user_id: int, map_code: str, tournament_id: int
-    ) -> None:
-        query = """--sql
-            INSERT INTO map_contest (user_id, map_code, tournament_id)
-            VALUES (:user_id, :map_code, :tournament_id)
-            ON CONFLICT (user_id, tournament_id) DO UPDATE
-              SET map_code = :map_code;
-        """
-        await self._db.execute(
-            query, user_id=user_id, map_code=map_code, tournament_id=tournament_id
-        )
-
-    async def fetch_map_contest_submissions(
-        self, tournament_id: int
-    ) -> list[MapContestSubmission]:
-        query = """--sql
-            SELECT
-              map_code,
-              user_id
-            FROM map_contest
-            WHERE tournament_id = :tournament_id;
-        """
-        return await self._db.select(
-            query, tournament_id=tournament_id, schema_type=MapContestSubmission
-        )
-
-    async def delete_map_contest_map(self, tournament_id: int, map_code: str) -> None:
-        query = """--sql
-            DELETE FROM map_contest
-            WHERE tournament_id = :tournament_id AND map_code = :map_code;
-        """
-        await self._db.execute(query, tournament_id=tournament_id, map_code=map_code)
-
     async def fetch_mission(
         self, category: str, difficulty: str, tournament_id: int
     ) -> Mission | None:
@@ -337,7 +292,7 @@ class TournamentService(Service):
               CAST(target AS FLOAT) AS target,
               difficulty,
               category,
-              CAST(extra_target AS FLOAT) AS extra_target
+              extra_target
             FROM tournament_missions
             WHERE
               category = :category
@@ -359,7 +314,7 @@ class TournamentService(Service):
         target: float | None,
         difficulty: str,
         category: str,
-        extra_target: float | None,
+        extra_target: str | None,
     ) -> None:
         query = """--sql
             INSERT INTO tournament_missions (
@@ -413,7 +368,7 @@ class TournamentService(Service):
               CAST(tmi.target AS FLOAT) AS target,
               tmi.difficulty,
               tmi.category,
-              CAST(tmi.extra_target AS FLOAT) AS extra_target,
+              tmi.extra_target,
               tm.code,
               tm.level,
               tm.creator
@@ -441,7 +396,7 @@ class TournamentService(Service):
             SELECT
               type,
               CAST(target AS FLOAT) AS target,
-              CAST(extra_target AS FLOAT) AS extra_target
+              extra_target
             FROM tournament_missions
             WHERE id = :tournament_id AND category = 'General'
             LIMIT 1;

@@ -82,22 +82,6 @@ class UserService(Service):
         """
         await self._db.execute(query, user_id=user_id, nickname=nickname)
 
-    async def set_alertable(self, user_id: int, alertable: bool) -> None:
-        query = """--sql
-            UPDATE users
-            SET alertable = :alertable
-            WHERE user_id = :user_id;
-        """
-        await self._db.execute(query, user_id=user_id, alertable=alertable)
-
-    async def is_alertable(self, user_id: int) -> bool | None:
-        query = """--sql
-            SELECT alertable
-            FROM users
-            WHERE user_id = :user_id;
-        """
-        return await self._db.select_value_or_none(query, user_id=user_id)
-
     async def fetch_all(self) -> list[UserProfile]:
         query = """--sql
             SELECT
@@ -120,16 +104,42 @@ class UserService(Service):
         """
         return await self._db.select(query, user_id=user_id, schema_type=UserAlias)
 
-    async def add_aliases(self, rows: list[tuple[int, str, bool]]) -> None:
+    async def add_alias(self, user_id: int, alias: str, *, primary: bool) -> None:
         query = """--sql
             INSERT INTO alias (user_id, alias, "primary")
-            VALUES ($1, $2, $3);
+            VALUES (:user_id, :alias, :primary);
         """
-        await self._db.execute_many(query, rows)
+        await self._db.execute(query, user_id=user_id, alias=alias, primary=primary)
 
-    async def add_primary_alias(self, user_id: int, alias: str) -> None:
+    async def remove_alias(self, user_id: int, alias: str) -> None:
         query = """--sql
-            INSERT INTO alias (user_id, alias, "primary")
-            VALUES (:user_id, :alias, TRUE);
+            DELETE FROM alias
+            WHERE user_id = :user_id AND alias = :alias;
         """
         await self._db.execute(query, user_id=user_id, alias=alias)
+
+    async def set_primary_alias(self, user_id: int, alias: str) -> None:
+        query = """--sql
+            UPDATE alias
+            SET "primary" = (alias = :alias)
+            WHERE user_id = :user_id;
+        """
+        await self._db.execute(query, user_id=user_id, alias=alias)
+
+    async def fetch_nickname(self, user_id: int) -> str | None:
+        query = """--sql
+            SELECT nickname
+            FROM users
+            WHERE user_id = :user_id;
+        """
+        return await self._db.select_value_or_none(query, user_id=user_id)
+
+    async def backfill_flags_from_alertable(self) -> int:
+        # 7 = Notification.VERIFIED | DENIED | SPECTACULAR (utilities/flags.py).
+        query = """--sql
+            UPDATE users
+            SET flags = CASE WHEN alertable THEN 7 ELSE 0 END
+            WHERE flags IS NULL;
+        """
+        result = await self._db.execute(query)
+        return result.rows_affected

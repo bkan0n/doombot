@@ -79,6 +79,14 @@ class XPService(Service):
                 ) AS bonus
               FROM users AS u
               LEFT JOIN user_ranks AS ur ON u.user_id = ur.user_id
+            ),
+            
+            duel_stats AS (
+              SELECT
+                COUNT(*) FILTER (WHERE result = 1) AS wins,
+                COUNT(*) FILTER (WHERE result = -1) AS losses
+              FROM duel_players
+              WHERE user_id = :user_id
             )
             
             SELECT
@@ -90,23 +98,12 @@ class XPService(Service):
               ranks.mildcore,
               ranks.hardcore,
               ranks.bonus,
-              COALESCE(user_duels.wins, 0) AS wins,
-              COALESCE(user_duels.losses, 0) AS losses
+              duel_stats.wins,
+              duel_stats.losses
             FROM ranks
             LEFT JOIN all_positions ON ranks.user_id = all_positions.user_id
-            LEFT JOIN user_duels ON all_positions.user_id = user_duels.user_id
-            WHERE all_positions.user_id = :user_id
-            GROUP BY
-              all_positions.user_id,
-              all_positions.nickname,
-              all_positions.xp,
-              all_positions.pos,
-              ranks.time_attack,
-              ranks.mildcore,
-              ranks.hardcore,
-              ranks.bonus,
-              user_duels.wins,
-              user_duels.losses;
+            CROSS JOIN duel_stats
+            WHERE all_positions.user_id = :user_id;
         """
         return await self._db.select_one_or_none(
             query, user_id=user_id, season=season, schema_type=RankCard

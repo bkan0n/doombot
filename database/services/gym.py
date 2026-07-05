@@ -3,9 +3,8 @@ import msgspec
 from ._base import Service
 
 
-class GymRecord(msgspec.Struct, frozen=True):
-    user_id: int
-    exercise: str
+class GymLeaderboardEntry(msgspec.Struct, frozen=True):
+    nickname: str
     value: float
 
 
@@ -41,17 +40,45 @@ class GymService(Service):
         """
         await self._db.execute(query, name=name, exercise_type=exercise_type)
 
-    async def fetch_exercise_prs(self, exercise: str) -> list[GymRecord]:
+    async def fetch_exercise_leaderboard(
+        self, exercise: str
+    ) -> list[GymLeaderboardEntry]:
         query = """--sql
             SELECT
-              user_id,
-              exercise,
-              CAST(value AS FLOAT) AS value
-            FROM gym_records
-            WHERE exercise = :exercise
-            ORDER BY value DESC;
+              COALESCE(u.nickname, 'Unknown User') AS nickname,
+              CAST(g.value AS FLOAT) AS value
+            FROM gym_records AS g
+            LEFT JOIN users AS u ON g.user_id = u.user_id
+            WHERE g.exercise = :exercise
+            ORDER BY g.value DESC;
         """
-        return await self._db.select(query, exercise=exercise, schema_type=GymRecord)
+        return await self._db.select(
+            query, exercise=exercise, schema_type=GymLeaderboardEntry
+        )
+
+    async def autocomplete_exercise_names(self, search: str) -> list[str]:
+        query = """--sql
+            SELECT name
+            FROM exercises
+            ORDER BY SIMILARITY(name, :search) DESC, name
+            LIMIT 25;
+        """
+        rows = await self._db.select(query, search=search)
+        return [row["name"] for row in rows]
+
+    async def fetch_random_exercise(self) -> Exercise | None:
+        query = """--sql
+            SELECT
+              name,
+              location,
+              target,
+              equipment,
+              url
+            FROM exercises
+            ORDER BY RANDOM()
+            LIMIT 1;
+        """
+        return await self._db.select_one_or_none(query, schema_type=Exercise)
 
     async def search_exercises(
         self, location: str | None, equipment: str | None, name: str | None

@@ -6,6 +6,9 @@ from ._base import Service
 class PreviousRecord(msgspec.Struct, frozen=True):
     record: float
     hidden_id: int | None
+    message_id: int
+    channel_id: int
+    video: str | None
 
 
 class LeaderboardRecord(msgspec.Struct, frozen=True):
@@ -66,14 +69,14 @@ class PendingRecord(msgspec.Struct, frozen=True):
     channel_id: int
 
 
-class RecordMessageInfo(msgspec.Struct, frozen=True):
+class RecordCardData(msgspec.Struct, frozen=True):
     user_id: int
-    hidden_id: int | None
-
-
-class TopRecordVotes(msgspec.Struct, frozen=True):
-    count: int
-    top_record_id: int | None
+    map_code: str
+    level_name: str
+    record: float
+    video: str | None
+    verified: bool
+    nickname: str
 
 
 class RecordService(Service):
@@ -85,7 +88,10 @@ class RecordService(Service):
         query = """--sql
             SELECT
               CAST(r.record AS FLOAT) AS record,
-              r.hidden_id
+              r.hidden_id,
+              r.message_id,
+              r.channel_id,
+              r.video
             FROM records AS r
             LEFT OUTER JOIN maps AS m ON r.map_code = m.map_code
             WHERE
@@ -558,95 +564,55 @@ class RecordService(Service):
         rows = await self._db.select(query)
         return [row["hidden_id"] for row in rows]
 
-    async def fetch_record_message_info(
-        self, message_id: int
-    ) -> RecordMessageInfo | None:
+    async def fetch_record_card_data(self, message_id: int) -> RecordCardData | None:
         query = """--sql
             SELECT
-              user_id,
-              hidden_id
-            FROM records
-            WHERE message_id = :message_id;
+              r.user_id,
+              r.map_code,
+              r.level_name,
+              CAST(r.record AS FLOAT) AS record,
+              r.video,
+              r.verified,
+              COALESCE(a.alias, u.nickname) AS nickname
+            FROM records AS r
+            LEFT JOIN alias AS a ON r.user_id = a.user_id AND a."primary" = TRUE
+            LEFT JOIN users AS u ON r.user_id = u.user_id
+            WHERE r.message_id = :message_id;
         """
         return await self._db.select_one_or_none(
-            query, message_id=message_id, schema_type=RecordMessageInfo
+            query, message_id=message_id, schema_type=RecordCardData
         )
 
-    async def fetch_top_record_votes(
-        self, original_message_id: int, channel_id: int
-    ) -> TopRecordVotes | None:
+    async def add_top_record_vote(
+        self, user_id: int, original_message_id: int, channel_id: int
+    ) -> bool:
+        """Record a star vote. Returns False if the user already voted."""
         query = """--sql
-            SELECT
-              COUNT(*) AS count,
-              MAX(top_record_id) AS top_record_id
-            FROM top_records
-            WHERE
-              original_message_id = :original_message_id
-              AND channel_id = :channel_id
-            GROUP BY original_message_id, channel_id;
+            INSERT INTO top_records (user_id, original_message_id, channel_id)
+            VALUES (:user_id, :original_message_id, :channel_id)
+            ON CONFLICT (user_id, original_message_id, channel_id) DO NOTHING
+            RETURNING user_id;
         """
-        return await self._db.select_one_or_none(
+        row = await self._db.select_value_or_none(
             query,
+            user_id=user_id,
             original_message_id=original_message_id,
             channel_id=channel_id,
-            schema_type=TopRecordVotes,
         )
+        return row is not None
 
-    async def set_top_record_message(
-        self, top_record_id: int, original_message_id: int, channel_id: int
-    ) -> None:
+    async def fetch_top_record_vote_count(
+        self, original_message_id: int, channel_id: int
+    ) -> int:
         query = """--sql
-            UPDATE top_records
-            SET top_record_id = :top_record_id
+            SELECT COUNT(*)
+            FROM top_records
             WHERE
               original_message_id = :original_message_id
               AND channel_id = :channel_id;
         """
-        await self._db.execute(
-            query,
-            top_record_id=top_record_id,
-            original_message_id=original_message_id,
-            channel_id=channel_id,
-        )
-
-    async def add_top_record_vote(
-        self,
-        user_id: int,
-        original_message_id: int,
-        channel_id: int,
-        top_record_id: int,
-    ) -> None:
-        query = """--sql
-            INSERT INTO top_records (
-              user_id, original_message_id, channel_id, top_record_id
-            )
-            VALUES (:user_id, :original_message_id, :channel_id, :top_record_id)
-            ON CONFLICT (user_id, original_message_id, channel_id) DO NOTHING;
-        """
-        await self._db.execute(
-            query,
-            user_id=user_id,
-            original_message_id=original_message_id,
-            channel_id=channel_id,
-            top_record_id=top_record_id,
-        )
-
-    async def has_top_record_vote(
-        self, original_message_id: int, channel_id: int, user_id: int
-    ) -> bool:
-        query = """--sql
-            SELECT user_id
-            FROM top_records
-            WHERE
-              original_message_id = :original_message_id
-              AND channel_id = :channel_id
-              AND user_id = :user_id
-            LIMIT 1;
-        """
-        row = await self._db.select_value_or_none(
+        return await self._db.select_value(
             query,
             original_message_id=original_message_id,
             channel_id=channel_id,
-            user_id=user_id,
         )
-        return row is not None

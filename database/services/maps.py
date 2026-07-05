@@ -1,3 +1,5 @@
+import typing
+
 import msgspec
 
 from ._base import Service
@@ -12,6 +14,7 @@ class MapSearchResult(msgspec.Struct, frozen=True):
     image: str | None
     creators: str
     creators_ids: list[int]
+    levels: list[str]
     rating: float
 
 
@@ -62,12 +65,14 @@ class MapService(Service):
         """
         await self._db.execute(query, map_code=map_code, user_id=user_id)
 
-    async def add_levels(self, rows: list[tuple[str, str]]) -> None:
+    async def add_levels(self, map_code: str, levels: list[str]) -> None:
         query = """--sql
             INSERT INTO map_levels (map_code, level)
-            VALUES ($1, $2);
+            SELECT
+              :map_code,
+              UNNEST(CAST(:levels AS TEXT []));
         """
-        await self._db.execute_many(query, rows)
+        await self._db.execute(query, map_code=map_code, levels=levels)
 
     async def delete_level(self, map_code: str, level: str) -> None:
         query = """--sql
@@ -115,87 +120,97 @@ class MapService(Service):
         """
         await self._db.execute(query, map_code=map_code, image=image)
 
-    async def search_maps(
+    @typing.overload
+    async def fetch_map(
         self,
-        map_type: str | None,
-        map_name: str | None,
-        map_code: str | None,
-        creator: int | None,
-    ) -> list[MapSearchResult]:
+        *,
+        map_code: str,
+        map_type: str | None = None,
+        map_name: str | None = None,
+        creator: int | None = None,
+    ) -> MapSearchResult | None: ...
+
+    @typing.overload
+    async def fetch_map(
+        self,
+        *,
+        map_type: str | None = None,
+        map_name: str | None = None,
+        creator: int | None = None,
+    ) -> list[MapSearchResult]: ...
+
+    async def fetch_map(
+        self,
+        *,
+        map_type: str | None = None,
+        map_name: str | None = None,
+        map_code: str | None = None,
+        creator: int | None = None,
+    ) -> MapSearchResult | None | list[MapSearchResult]:
         query = """--sql
-            WITH valid_ratings AS (
+            WITH map_creator_info AS (
               SELECT
-                mr.map_code,
-                mr.level,
-                mr.rating,
-                mr.user_id,
-                r.level_name
-              FROM map_level_ratings AS mr
-              LEFT JOIN records AS r
-                ON
-                  mr.user_id = r.user_id
-                  AND mr.level = r.level_name
-                  AND mr.map_code = r.map_code
+                mc.map_code,
+                STRING_AGG(DISTINCT u.nickname, ', ') AS creators,
+                ARRAY_AGG(DISTINCT mc.user_id) AS creators_ids
+              FROM map_creators AS mc
+              INNER JOIN users AS u ON mc.user_id = u.user_id
+              GROUP BY mc.map_code
+            ),
+            
+            map_level_info AS (
+              SELECT
+                map_code,
+                ARRAY_AGG(level ORDER BY level) AS levels
+              FROM map_levels
+              GROUP BY map_code
+            ),
+            
+            map_rating_info AS (
+              SELECT
+                map_code,
+                CAST(AVG(rating) AS FLOAT) AS rating
+              FROM map_level_ratings
+              GROUP BY map_code
             )
             
             SELECT
-              map_code,
-              map_type,
-              map_name,
-              "desc",
-              official,
-              image,
-              creators,
-              creators_ids,
-              CAST(AVG(rating) AS FLOAT) AS rating
-            FROM (
-              SELECT
-                mc.map_code,
-                ARRAY_TO_STRING(maps.map_type, ', ') AS map_type,
-                maps.map_name,
-                maps."desc",
-                maps.official,
-                maps.image,
-                STRING_AGG(DISTINCT u.nickname, ', ') AS creators,
-                ARRAY_AGG(DISTINCT mc.user_id) AS creators_ids,
-                AVG(COALESCE(vr.rating, 0)) AS rating
-              FROM maps
-              INNER JOIN map_creators AS mc ON maps.map_code = mc.map_code
-              INNER JOIN users AS u ON mc.user_id = u.user_id
-              LEFT JOIN valid_ratings AS vr ON maps.map_code = vr.map_code
-              WHERE
-                (
-                  CAST(:map_type AS TEXT) IS NULL
-                  OR :map_type = ANY(maps.map_type)
-                )
-                AND (CAST(:map_name AS TEXT) IS NULL OR maps.map_name = :map_name)
-                AND (CAST(:map_code AS TEXT) IS NULL OR maps.map_code = :map_code)
-              GROUP BY
-                maps.map_type,
-                mc.map_code,
-                maps.map_name,
-                maps."desc",
-                maps.official,
-                vr.rating,
-                maps.image
-              HAVING
-                (
-                  CAST(:creator AS BIGINT) IS NULL
-                  OR :creator = ANY(ARRAY_AGG(DISTINCT mc.user_id))
-                )
-              ORDER BY mc.map_code
-            ) AS layer0
-            GROUP BY
-              map_code,
-              map_type,
-              map_name,
-              "desc",
-              official,
-              creators,
-              creators_ids,
-              image
-            ORDER BY map_code;
+              m.map_code,
+              ARRAY_TO_STRING(m.map_type, ', ') AS map_type,
+              m.map_name,
+              m."desc",
+              m.official,
+              m.image,
+              mci.creators,
+              mci.creators_ids,
+              COALESCE(mli.levels, CAST('{}' AS TEXT [])) AS levels,
+              COALESCE(mri.rating, 0) AS rating
+            FROM maps AS m
+            INNER JOIN map_creator_info AS mci ON m.map_code = mci.map_code
+            LEFT JOIN map_level_info AS mli ON m.map_code = mli.map_code
+            LEFT JOIN map_rating_info AS mri ON m.map_code = mri.map_code
+            WHERE
+              (
+                CAST(:map_type AS TEXT) IS NULL
+                OR :map_type = ANY(m.map_type)
+              )
+              AND (CAST(:map_name AS TEXT) IS NULL OR m.map_name = :map_name)
+              AND (CAST(:map_code AS TEXT) IS NULL OR m.map_code = :map_code)
+              AND (
+                CAST(:creator AS BIGINT) IS NULL
+                OR :creator = ANY(mci.creators_ids)
+              )
+            ORDER BY m.map_code;
         """
+        if map_code is not None:
+            return await self._db.select_one_or_none(
+                query,
+                map_type=None,
+                map_name=None,
+                map_code=map_code,
+                creator=None,
+                schema_type=MapSearchResult,
+            )
         return await self._db.select(
             query,
             map_type=map_type,

@@ -196,7 +196,7 @@ class TagService(Service):
 
     async def create_tag_alias(
         self, new_name: str, old_name: str, location_id: int, owner_id: int
-    ) -> None:
+    ) -> int:
         query = """--sql
             INSERT INTO tag_lookup (name, owner_id, location_id, tag_id)
             SELECT
@@ -209,13 +209,14 @@ class TagService(Service):
               tag_lookup.location_id = :location_id
               AND LOWER(tag_lookup.name) = :old_name;
         """
-        await self._db.execute(
+        result = await self._db.execute(
             query,
             new_name=new_name,
             old_name=old_name,
             location_id=location_id,
             owner_id=owner_id,
         )
+        return result.rows_affected
 
     async def tag_exists(self, location_id: int, name: str) -> bool:
         query = """--sql

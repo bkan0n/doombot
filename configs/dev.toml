@@ -3,6 +3,32 @@ guild = 195387617972322306
 [roles]
 staff = 1047262740315643925
 
+[roles.tournament]
+time_attack = 841339455285886976
+mildcore = 841339569705844756
+hardcore = 841339590421381150
+bonus = 841339621391859723
+trifecta = 841378440078819378
+organizer = 840440551098679296
+
+[roles.pronouns]
+they_them = 0
+she_her = 0
+he_him = 0
+
+[roles.pings]
+announcements = 0
+eu_sleep = 0
+na_sleep = 0
+asia_sleep = 0
+oce_sleep = 0
+movie_night = 0
+game_night = 0
+
+[channels]
+gym = 941736649069563974
+duels = 1095368893591203861
+
 [channels.submission]
 new_maps = 856602254769782835
 verification_queue = 811467249100652586
@@ -15,3 +41,7 @@ hall_of_fame = 931959281845157978
 
 [channels.tournament]
 submissions = 840408122181812225
+announcements = 941737397316616192
+chat = 840432678606995486
+org_chat = 839876053828370503
+hall_of_fame = 931959281845157978

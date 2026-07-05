@@ -3,13 +3,16 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 from loguru import logger
 from sqlspec import AsyncDriverAdapterBase
 
 import extensions
 from database import Services
+from utilities import views
 from utilities.config import Config, decode
+from utilities.errors import UserFacingError
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -46,7 +49,7 @@ class Akande(commands.Bot):
     config: Config
 
     def __init__(self, spec: SQLSpec, db_config: AsyncDatabaseConfig) -> None:
-        super().__init__(command_prefix="?", intents=_generate_intents())
+        super().__init__(command_prefix="$", intents=_generate_intents())
         self._spec = spec
         self._db_config = db_config
         env = "prod" if os.getenv("APP_ENVIRONMENT") == "production" else "dev"
@@ -65,6 +68,20 @@ class Akande(commands.Bot):
         logger.info(f"Bot ({self.application_id}) is now ready.")
 
     async def setup_hook(self) -> None:
+        self.tree.error(self._on_app_command_error)
         for ext in extensions.EXTENSIONS + ["jishaku"]:
             logger.info(f"Loading {ext}...")
             await self.load_extension(ext)
+
+    async def _on_app_command_error(
+        self, itx: discord.Interaction, error: app_commands.AppCommandError
+    ) -> None:
+        if isinstance(error, UserFacingError):
+            await views.send_error(itx, str(error))
+            return
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await views.send_error(
+                itx, f"You're on cooldown. Try again in {error.retry_after:.0f}s."
+            )
+            return
+        logger.opt(exception=error).error("Unhandled application command error")
