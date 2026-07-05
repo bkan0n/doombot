@@ -60,6 +60,18 @@ class HousekeepingCog(BaseCog):
             count = await svc.users.backfill_flags_from_alertable()
         await ctx.send(f"Backfilled flags for {count} user(s).")
 
+    @commands.command(name="add-map-name")
+    @commands.guild_only()
+    @commands.is_owner()
+    async def add_map_name(self, ctx: AkandeCtx, *, name: str) -> None:
+        """Add a map name to all_map_names with the default 000000 color."""
+        async with self.bot.acquire() as svc:
+            inserted = await svc.maps.insert_map_name(name)
+        if inserted:
+            await ctx.send(f"Added map name `{name}`.")
+        else:
+            await ctx.send(f"Map name `{name}` already exists.")
+
 
 async def setup(bot: Akande) -> None:
     await bot.add_cog(HousekeepingCog(bot))

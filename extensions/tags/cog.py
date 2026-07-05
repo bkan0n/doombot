@@ -7,6 +7,7 @@ import typing
 
 import discord
 from discord import app_commands, ui
+from discord.ext import commands
 from sqlspec.exceptions import UniqueViolationError
 
 from utilities import views
@@ -17,7 +18,7 @@ from . import naming
 from .views import TagEditModal, TagMakeModal
 
 if typing.TYPE_CHECKING:
-    from core import Akande, AkandeItx
+    from core import Akande, AkandeCtx, AkandeItx
     from database import Services
     from database.services.tags import Tag
 
@@ -77,10 +78,6 @@ def _can_moderate(itx: AkandeItx) -> bool:
 class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval."):
     """Tags"""
 
-    _tag = app_commands.Group(
-        name="tag", description="Tag text for later retrieval", guild_only=True
-    )
-
     def __init__(self, bot: Akande) -> None:
         super().__init__(bot)
         # guild_id -> names currently being made via modal
@@ -101,7 +98,7 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
         raise UserFacingError("Tag not found.")
 
     def _reserved(self) -> frozenset[str]:
-        return frozenset(command.name for command in self._tag.commands)
+        return frozenset(command.name for command in self.tag.app_command.commands)
 
     def _is_in_progress(self, guild_id: int, name: str) -> bool:
         return name in self._in_progress.get(guild_id, set())
@@ -125,18 +122,23 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
 
     # -- commands ----------------------------------------------------------
 
-    @_tag.command(name="get", description="Retrieve a tag's content")
+    @commands.hybrid_group(
+        name="tag", fallback="get", description="Tag text for later retrieval"
+    )
+    @commands.guild_only()
+    @app_commands.guild_only()
     @app_commands.describe(name="The tag to retrieve")
     @app_commands.autocomplete(name=_autocomplete_all)
-    async def get(self, itx: AkandeItx, name: str) -> None:
-        assert itx.guild_id
+    async def tag(self, ctx: AkandeCtx, *, name: str) -> None:
+        """Retrieve a tag's content."""
+        assert ctx.guild
         name = name.strip().lower()
-        async with itx.client.acquire() as svc:
-            tag = await self._get_tag_or_suggest(svc, itx.guild_id, name)
-            await svc.tags.increment_tag_uses(tag.name, itx.guild_id)
-        await itx.response.send_message(tag.content, allowed_mentions=_MENTIONS)
+        async with ctx.bot.acquire() as svc:
+            tag = await self._get_tag_or_suggest(svc, ctx.guild.id, name)
+            await svc.tags.increment_tag_uses(tag.name, ctx.guild.id)
+        await ctx.send(tag.content, allowed_mentions=_MENTIONS)
 
-    @_tag.command(name="create", description="Create a new tag owned by you")
+    @tag.app_command.command(name="create", description="Create a new tag owned by you")
     @app_commands.describe(name="The tag name", content="The tag content")
     async def create(
         self,
@@ -146,7 +148,9 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
     ) -> None:
         await self._create_tag(itx, name, content)
 
-    @_tag.command(name="make", description="Interactively create a tag via a form")
+    @tag.app_command.command(
+        name="make", description="Interactively create a tag via a form"
+    )
     async def make(self, itx: AkandeItx) -> None:
         assert itx.guild_id
         guild_id = itx.guild_id
@@ -161,7 +165,7 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
 
         await itx.response.send_modal(TagMakeModal(submit))
 
-    @_tag.command(name="edit", description="Edit a tag you own")
+    @tag.app_command.command(name="edit", description="Edit a tag you own")
     @app_commands.describe(
         name="The tag to edit",
         content="New content; omit to edit in a form",
@@ -204,7 +208,9 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
             )
         await itx.response.send_modal(TagEditModal(current, apply))
 
-    @_tag.command(name="alias", description="Create an alias for an existing tag")
+    @tag.app_command.command(
+        name="alias", description="Create an alias for an existing tag"
+    )
     @app_commands.describe(
         new_name="The name of the alias", old_name="The original tag to alias"
     )
@@ -234,7 +240,7 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
             ephemeral=True,
         )
 
-    @_tag.command(name="remove", description="Remove a tag you own")
+    @tag.app_command.command(name="remove", description="Remove a tag you own")
     @app_commands.describe(name="The tag to remove")
     @app_commands.autocomplete(name=_autocomplete_owned_all)
     async def remove(self, itx: AkandeItx, name: str) -> None:
@@ -266,7 +272,9 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
         )
         await itx.response.send_message(message, ephemeral=True)
 
-    @_tag.command(name="remove-id", description="Remove a tag by its internal ID")
+    @tag.app_command.command(
+        name="remove-id", description="Remove a tag by its internal ID"
+    )
     @app_commands.describe(tag_id="The internal tag ID to delete")
     @app_commands.rename(tag_id="id")
     async def remove_id(self, itx: AkandeItx, tag_id: int) -> None:
@@ -297,7 +305,9 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
         )
         await itx.response.send_message(message, ephemeral=True)
 
-    @_tag.command(name="info", description="Info about a tag: owner, uses, rank")
+    @tag.app_command.command(
+        name="info", description="Info about a tag: owner, uses, rank"
+    )
     @app_commands.describe(name="The tag to retrieve information for")
     @app_commands.autocomplete(name=_autocomplete_all)
     async def info(self, itx: AkandeItx, name: str) -> None:
@@ -333,7 +343,9 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
             )
         await itx.edit_original_response(view=views.Card([body]))
 
-    @_tag.command(name="raw", description="Raw, markdown-escaped tag content")
+    @tag.app_command.command(
+        name="raw", description="Raw, markdown-escaped tag content"
+    )
     @app_commands.describe(name="The tag to retrieve raw content for")
     @app_commands.autocomplete(name=_autocomplete_originals)
     async def raw(self, itx: AkandeItx, name: str) -> None:
@@ -351,7 +363,7 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
             return
         await itx.response.send_message(escaped, allowed_mentions=_MENTIONS)
 
-    @_tag.command(name="random", description="Display a random tag")
+    @tag.app_command.command(name="random", description="Display a random tag")
     async def random(self, itx: AkandeItx) -> None:
         assert itx.guild_id
         async with itx.client.acquire() as svc:
@@ -372,7 +384,9 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
             for chunk in itertools.batched(entries, per_page)
         ]
 
-    @_tag.command(name="list", description="List tags owned by you or someone else")
+    @tag.app_command.command(
+        name="list", description="List tags owned by you or someone else"
+    )
     @app_commands.describe(member="Whose tags to list (defaults to you)")
     async def list_(self, itx: AkandeItx, member: discord.Member | None = None) -> None:
         assert itx.guild_id
@@ -385,7 +399,7 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
         pages = self._entry_pages(rows, f"### Tags — {target.display_name}")
         await views.Paginator(itx, pages).start()
 
-    @_tag.command(name="all", description="List every tag in this server")
+    @tag.app_command.command(name="all", description="List every tag in this server")
     @app_commands.describe(text_file="Dump all tags as a text file instead")
     async def all_(self, itx: AkandeItx, text_file: bool = False) -> None:
         assert itx.guild_id
@@ -415,7 +429,7 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
             raise UserFacingError("This server has no tags.")
         await views.Paginator(itx, self._entry_pages(rows, "### All Tags")).start()
 
-    @_tag.command(name="search", description="Search tags by name")
+    @tag.app_command.command(name="search", description="Search tags by name")
     @app_commands.describe(query="The tag name to search for (min 3 characters)")
     async def search(
         self, itx: AkandeItx, query: app_commands.Range[str, 3, 100]
@@ -429,7 +443,9 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
         pages = self._entry_pages(rows, f"### Tag Search — {query}")
         await views.Paginator(itx, pages).start()
 
-    @_tag.command(name="purge", description="Remove all tags owned by a member")
+    @tag.app_command.command(
+        name="purge", description="Remove all tags owned by a member"
+    )
     @app_commands.describe(member="The member whose tags to purge")
     async def purge(self, itx: AkandeItx, member: discord.User) -> None:
         assert itx.guild_id
@@ -454,7 +470,9 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
             view=views.Card([f"Removed all {count} tag(s) belonging to {member}."])
         )
 
-    @_tag.command(name="claim", description="Claim a tag whose owner left the server")
+    @tag.app_command.command(
+        name="claim", description="Claim a tag whose owner left the server"
+    )
     @app_commands.describe(tag="The tag to claim")
     @app_commands.autocomplete(tag=_autocomplete_all)
     async def claim(self, itx: AkandeItx, tag: str) -> None:
@@ -489,7 +507,9 @@ class TagsCog(BaseCog, name="tags", description="Tag text for later retrieval.")
             view=views.Card(["Successfully transferred tag ownership to you."])
         )
 
-    @_tag.command(name="transfer", description="Transfer a tag you own to a member")
+    @tag.app_command.command(
+        name="transfer", description="Transfer a tag you own to a member"
+    )
     @app_commands.describe(member="The member to transfer to", tag="The tag")
     @app_commands.autocomplete(tag=_autocomplete_originals)
     async def transfer(self, itx: AkandeItx, member: discord.Member, tag: str) -> None:
