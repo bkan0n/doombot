@@ -26,6 +26,7 @@ __all__ = (
     "URLTransformer",
     "UserTransformer",
     "parse_future_date",
+    "validate_url",
 )
 
 CODE_VERIFICATION = re.compile(r"^[A-Z0-9]{4,6}$")
@@ -229,15 +230,23 @@ class SeasonTransformer(app_commands.Transformer):
         ]
 
 
+async def validate_url(session: aiohttp.ClientSession, value: str) -> str:
+    """Normalize the scheme, fetch the URL, and return its resolved form.
+
+    Raises UserFacingError when the URL doesn't answer with HTTP 200.
+    """
+    value = value.strip()
+    if not value.startswith(("http://", "https://")):
+        value = "https://" + value
+    try:
+        async with session.get(value) as resp:
+            if resp.status != 200:
+                raise UserFacingError("URL is invalid.")
+            return str(resp.url)
+    except aiohttp.ClientError:
+        raise UserFacingError("URL is invalid.") from None
+
+
 class URLTransformer(app_commands.Transformer):
     async def transform(self, itx: AkandeItx, value: str) -> str:
-        value = value.strip()
-        if not value.startswith(("http://", "https://")):
-            value = "https://" + value
-        try:
-            async with itx.client.session.get(value) as resp:
-                if resp.status != 200:
-                    raise UserFacingError("URL is invalid.")
-                return str(resp.url)
-        except aiohttp.ClientError:
-            raise UserFacingError("URL is invalid.") from None
+        return await validate_url(itx.client.session, value)
