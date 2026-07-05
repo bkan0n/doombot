@@ -161,12 +161,14 @@ def map_submission_body(
     *,
     header: str,
     showcase_image: bool = False,
+    include_levels: bool = True,
 ) -> list[str | ui.Item]:
     """The map submission card, top to bottom.
 
     Used by the confirm preview and the new-maps announcement.
     ``showcase_image=False`` renders the image as a small thumbnail beside
     the details; ``True`` renders it large in a gallery at the bottom.
+    ``include_levels=False`` omits the level list (the announcement card).
     """
     details = (
         f"`Code` **{sub.map_code}**\n"
@@ -185,8 +187,7 @@ def map_submission_body(
     return [
         f"## {header}",
         detail_item,
-        ui.Separator(),
-        _levels_display(sub.levels),
+        *((ui.Separator(), _levels_display(sub.levels)) if include_levels else ()),
         *((gallery,) if showcase_image and sub.image_url else ()),
     ]
 
@@ -303,6 +304,7 @@ class MapSubmitModal(ui.Modal, title="Map Submission"):
                 sub,
                 header=f"New map by {itx.user.display_name}",
                 showcase_image=True,
+                include_levels=False,
             )
         )
         message = (
