@@ -94,7 +94,7 @@ def test_map_submission_body_renders_guide_line() -> None:
         _sub(guide_url="https://example.com/guide"), header="Preview"
     )
     strings = [item for item in body if isinstance(item, str)]
-    assert any("`Guide` https://example.com/guide" in s for s in strings)
+    assert any("`Guide` [View](https://example.com/guide)" in s for s in strings)
     assert _GUIDE_WARNING not in strings
 
 

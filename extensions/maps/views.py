@@ -225,7 +225,7 @@ def map_submission_body(
         f"`Type` {', '.join(sub.map_types)}"
         + ("" if include_levels else f"\n`Levels` {len(sub.levels)}")
         + (f"\n`Description` {sub.description}" if sub.description else "")
-        + (f"\n`Guide` {sub.guide_url}" if sub.guide_url else "")
+        + (f"\n`Guide` [View]({sub.guide_url})" if sub.guide_url else "")
     )
     detail_item: str | ui.Item = details
     if sub.image_url and not showcase_image:
