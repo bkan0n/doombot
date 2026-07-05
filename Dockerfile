@@ -31,6 +31,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONFAULTHANDLER=1
 
+# pillow's wheel links the system zlib, which distroless lacks
+COPY --from=builder /usr/lib/*-linux-gnu/libz.so.1 /usr/lib/
+
 COPY --from=builder --chown=nonroot:nonroot /python /python
 COPY --from=builder --chown=nonroot:nonroot /app /app
 
