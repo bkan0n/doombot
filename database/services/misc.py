@@ -9,11 +9,6 @@ class Quote(msgspec.Struct, frozen=True):
     content: str
 
 
-class AutoJoinThread(msgspec.Struct, frozen=True):
-    channel_id: int
-    thread_id: int
-
-
 class ColorRole(msgspec.Struct, frozen=True):
     label: str
     role_id: int
@@ -22,7 +17,7 @@ class ColorRole(msgspec.Struct, frozen=True):
 
 
 class MiscService(Service):
-    """Quotes, insults, keep-alive threads, auto-join threads, color roles."""
+    """Quotes, insults, color roles."""
 
     async def fetch_random_quote(self) -> Quote | None:
         query = """--sql
@@ -83,37 +78,6 @@ class MiscService(Service):
             LIMIT 1;
         """
         return await self._db.select_value_or_none(query)
-
-    async def add_keep_alive(self, thread_id: int) -> None:
-        query = """--sql
-            INSERT INTO keep_alives (thread_id)
-            VALUES (:thread_id);
-        """
-        await self._db.execute(query, thread_id=thread_id)
-
-    async def remove_keep_alive(self, thread_id: int) -> None:
-        query = """--sql
-            DELETE FROM keep_alives
-            WHERE thread_id = :thread_id;
-        """
-        await self._db.execute(query, thread_id=thread_id)
-
-    async def fetch_keep_alives(self) -> list[int]:
-        query = """--sql
-            SELECT thread_id
-            FROM keep_alives;
-        """
-        rows = await self._db.select(query)
-        return [row["thread_id"] for row in rows]
-
-    async def fetch_auto_join_threads(self) -> list[AutoJoinThread]:
-        query = """--sql
-            SELECT
-              channel_id,
-              thread_id
-            FROM auto_join_thread;
-        """
-        return await self._db.select(query, schema_type=AutoJoinThread)
 
     async def fetch_color_roles(self) -> list[ColorRole]:
         query = """--sql
