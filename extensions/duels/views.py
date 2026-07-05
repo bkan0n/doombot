@@ -89,7 +89,7 @@ class _ReadyButton(ui.Button["ReadyUpView"]):
         self.style = discord.ButtonStyle.green
         self.disabled = True
 
-    async def callback(self, itx: discord.Interaction) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def callback(self, itx: discord.Interaction) -> None:
         assert self.view
         await self.view.handle_ready(itx, self)
 

@@ -87,3 +87,26 @@ class Akande(commands.Bot):
             )
             return
         logger.opt(exception=error).error("Unhandled application command error")
+
+    async def on_command_error(
+        self, ctx: commands.Context[Akande], error: commands.CommandError, /
+    ) -> None:
+        # Hybrid commands invoked as slash commands report errors here, not
+        # through the tree handler, wrapped in Hybrid/CommandInvokeError.
+        unwrapped: BaseException = error
+        while isinstance(
+            unwrapped,
+            commands.HybridCommandError
+            | commands.CommandInvokeError
+            | app_commands.CommandInvokeError,
+        ):
+            unwrapped = unwrapped.original
+        if isinstance(unwrapped, UserFacingError):
+            if ctx.interaction is not None:
+                await views.send_error(ctx.interaction, str(unwrapped))
+            else:
+                await ctx.send(str(unwrapped))
+            return
+        if isinstance(unwrapped, commands.CommandNotFound | commands.CheckFailure):
+            return
+        logger.opt(exception=unwrapped).error("Unhandled command error")

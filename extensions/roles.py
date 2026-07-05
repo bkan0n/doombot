@@ -115,9 +115,7 @@ class _ColorSelect(ui.Select["RolesPanel"]):
             custom_id="colors", placeholder="Pick a name color…", options=options
         )
 
-    async def callback(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> None:
+    async def callback(self, itx: AkandeItx) -> None:
         await itx.response.defer(ephemeral=True)
         assert itx.guild and isinstance(itx.user, discord.Member)
         # The registered options list can be stale (or empty, on the
@@ -160,7 +158,7 @@ class RolesPanel(ui.LayoutView):
                 _SleepPingButtons(),
                 ui.Separator(),
                 ui.TextDisplay("### Name Color"),
-                ui.ActionRow(_ColorSelect(colors)),  # pyright: ignore[reportArgumentType]
+                ui.ActionRow(_ColorSelect(colors)),
             )
         )
 

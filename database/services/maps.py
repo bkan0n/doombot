@@ -351,6 +351,22 @@ class MapService(Service):
         rows = await self._db.select(query)
         return [row["name"] for row in rows]
 
+    async def insert_map_name(self, name: str, color: str = "000000") -> bool:
+        query = """--sql
+            INSERT INTO all_map_names (name, color)
+            SELECT
+              :name,
+              :color
+            WHERE
+              NOT EXISTS (
+                SELECT 1
+                FROM all_map_names
+                WHERE LOWER(name) = LOWER(:name)
+              );
+        """
+        result = await self._db.execute(query, name=name, color=color)
+        return bool(result.rows_affected)
+
     async def fetch_map_types(self) -> list[str]:
         query = """--sql
             SELECT name

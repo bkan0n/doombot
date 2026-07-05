@@ -61,9 +61,7 @@ Equipment = typing.Literal[
 class ExerciseTransformer(app_commands.Transformer):
     """A PR-tracked exercise from all_exercises; transforms to its definition."""
 
-    async def transform(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx, value: str
-    ) -> ExerciseDefinition:
+    async def transform(self, itx: AkandeItx, value: str) -> ExerciseDefinition:
         async with itx.client.acquire() as svc:
             definitions = await svc.gym.fetch_exercise_definitions()
         for definition in definitions:
@@ -71,7 +69,7 @@ class ExerciseTransformer(app_commands.Transformer):
                 return definition
         raise UserFacingError("This exercise does not exist.")
 
-    async def autocomplete(  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def autocomplete(
         self, itx: AkandeItx, current: str
     ) -> list[app_commands.Choice[str]]:
         async with itx.client.acquire() as svc:
@@ -97,9 +95,7 @@ class GymCog(BaseCog, name="gym", description="Gym PRs and exercise tools."):
 
     _gym = app_commands.Group(name="gym", description="Gym PRs and exercise tools")
 
-    async def interaction_check(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> bool:
+    async def interaction_check(self, itx: AkandeItx) -> bool:
         gym_channel = itx.client.config.channels.gym
         if itx.channel_id != gym_channel:
             raise UserFacingError(f"Gym commands can only be used in <#{gym_channel}>.")

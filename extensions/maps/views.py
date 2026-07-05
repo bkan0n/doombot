@@ -19,6 +19,7 @@ if typing.TYPE_CHECKING:
 
 __all__ = (
     "MapSubmission",
+    "MapSubmissionReview",
     "MapSubmitModal",
     "map_search_pages",
     "map_submission_body",
@@ -26,6 +27,12 @@ __all__ = (
 )
 
 MAPS_PER_PAGE = 5
+
+_LEVELS_LABEL = "Level Names"
+_LEVELS_DESCRIPTION = (
+    "One level per line. Without individual levels, users cannot submit their times."
+)
+_LEVELS_MAX_LENGTH = 2000
 
 _OFFICIAL_BANNER = (
     "<:_:998055526468423700>"
@@ -120,6 +127,24 @@ def _map_banner_url(map_name: str) -> str:
     return f"https://cdn.bkan0n.com/assets/map_banners/{slug}.png"
 
 
+def _parse_levels(raw: str) -> list[str]:
+    """Unique, stripped level names in input order; error if none remain."""
+    levels = list(
+        dict.fromkeys(
+            stripped for line in raw.splitlines() if (stripped := line.strip())
+        )
+    )
+    if not levels:
+        raise UserFacingError("At least one level name is required.")
+    return levels
+
+
+def _levels_display(levels: list[str]) -> str:
+    """Numbered level list with a count header, for previews and cards."""
+    lines = "\n".join(f"{n}. {level}" for n, level in enumerate(levels, start=1))
+    return f"**Levels ({len(levels)})**\n{lines}"
+
+
 class MapSubmission(msgspec.Struct, frozen=True):
     """Everything a map submission card needs to render."""
 
@@ -136,12 +161,14 @@ def map_submission_body(
     *,
     header: str,
     showcase_image: bool = False,
+    include_levels: bool = True,
 ) -> list[str | ui.Item]:
     """The map submission card, top to bottom.
 
     Used by the confirm preview and the new-maps announcement.
     ``showcase_image=False`` renders the image as a small thumbnail beside
     the details; ``True`` renders it large in a gallery at the bottom.
+    ``include_levels=False`` omits the level list (the announcement card).
     """
     details = (
         f"`Code` **{sub.map_code}**\n"
@@ -160,8 +187,7 @@ def map_submission_body(
     return [
         f"## {header}",
         detail_item,
-        ui.Separator(),
-        "**Levels**\n" + "\n".join(sub.levels),
+        *((ui.Separator(), _levels_display(sub.levels)) if include_levels else ()),
         *((gallery,) if showcase_image and sub.image_url else ()),
     ]
 
@@ -203,11 +229,17 @@ class MapSubmitModal(ui.Modal, title="Map Submission"):
         self.add_item(self.description)
 
         self.levels = ui.TextInput(
-            label="Level Names",
             style=discord.TextStyle.paragraph,
-            placeholder="Add all level names, each on a new line.\nLevel 1\nLevel 2\nTrial of Agony",
+            placeholder="Level 1\nLevel 2\nTrial of Agony",
+            max_length=_LEVELS_MAX_LENGTH,
         )
-        self.add_item(self.levels)
+        self.add_item(
+            ui.Label(
+                text=_LEVELS_LABEL,
+                description=_LEVELS_DESCRIPTION,
+                component=self.levels,
+            )
+        )
 
         self._screenshot = ui.FileUpload(required=False)
         self.add_item(
@@ -222,50 +254,33 @@ class MapSubmitModal(ui.Modal, title="Map Submission"):
     def image(self) -> discord.Attachment | None:
         return self._screenshot.values[0] if self._screenshot.values else None
 
-    async def on_submit(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> None:
-        levels = list(
-            dict.fromkeys(
-                stripped
-                for line in self.levels.value.splitlines()
-                if (stripped := line.strip())
-            )
-        )
-        if not levels:
-            raise UserFacingError("At least one level name is required.")
-
+    async def on_submit(self, itx: AkandeItx) -> None:
         sub = MapSubmission(
             map_code=self.map_code,
             map_name=self.map_name,
             map_types=self.map_types.values,
             description=self.description.value,
-            levels=levels,
+            levels=_parse_levels(self.levels.value),
             image_url=self.image.url if self.image else None,
         )
-        confirmed = await views.Confirm.prompt(
-            itx,
-            *map_submission_body(sub, header="Map Submission - Is this correct?"),
-        )
-        if not confirmed:
+        final = await MapSubmissionReview.prompt(itx, sub)
+        if final is None:
             return
 
         async with itx.client.acquire() as svc, transaction(svc.db):
             await svc.maps.create_map(
-                map_name=sub.map_name,
-                map_type=sub.map_types,
-                map_code=sub.map_code,
-                description=sub.description or None,
+                map_name=final.map_name,
+                map_type=final.map_types,
+                map_code=final.map_code,
+                description=final.description or None,
                 image=None,
             )
-            await svc.maps.add_creator(sub.map_code, itx.user.id)
-            await svc.maps.add_levels(sub.map_code, sub.levels)
+            await svc.maps.add_creator(final.map_code, itx.user.id)
+            await svc.maps.add_levels(final.map_code, final.levels)
 
-        await self._announce(itx, sub)
+        await self._announce(itx, final)
 
-    async def on_error(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx, error: Exception
-    ) -> None:
+    async def on_error(self, itx: AkandeItx, error: Exception) -> None:
         if isinstance(error, UserFacingError):
             await views.send_error(itx, str(error))
             return
@@ -289,6 +304,7 @@ class MapSubmitModal(ui.Modal, title="Map Submission"):
                 sub,
                 header=f"New map by {itx.user.display_name}",
                 showcase_image=True,
+                include_levels=False,
             )
         )
         message = (
@@ -302,3 +318,106 @@ class MapSubmitModal(ui.Modal, title="Map Submission"):
                 await svc.maps.set_map_image(sub.map_code, message.attachments[0].url)
 
         await message.create_thread(name=f"Discuss {sub.map_code} here.")
+
+
+class _LevelEditModal(ui.Modal, title="Edit Levels"):
+    """Bulk editor for the staged level list.
+
+    Editing the pre-filled text is add, remove, and rename in one gesture:
+    insert a line, delete a line, or change a line.
+    """
+
+    def __init__(self, review: MapSubmissionReview) -> None:
+        super().__init__()
+        self._review = review
+        self.levels = ui.TextInput(
+            style=discord.TextStyle.paragraph,
+            default="\n".join(review.sub.levels),
+            max_length=_LEVELS_MAX_LENGTH,
+        )
+        self.add_item(
+            ui.Label(
+                text=_LEVELS_LABEL,
+                description=_LEVELS_DESCRIPTION,
+                component=self.levels,
+            )
+        )
+
+    async def on_submit(self, itx: AkandeItx) -> None:
+        await self._review.update_levels(itx, _parse_levels(self.levels.value))
+
+    async def on_error(self, itx: AkandeItx, error: Exception) -> None:
+        if isinstance(error, UserFacingError):
+            await views.send_error(itx, str(error))
+            return
+        await super().on_error(itx, error)
+
+
+class _ReviewButtons(ui.ActionRow["MapSubmissionReview"]):
+    @ui.button(label="Confirm", style=discord.ButtonStyle.green)
+    async def confirm(
+        self, interaction: discord.Interaction, button: ui.Button
+    ) -> None:
+        assert self.view
+        await self.view._resolve(interaction, confirmed=True)
+
+    @ui.button(label="Edit Levels", style=discord.ButtonStyle.grey)
+    async def edit_levels(
+        self, interaction: discord.Interaction, button: ui.Button
+    ) -> None:
+        assert self.view
+        await interaction.response.send_modal(_LevelEditModal(self.view))
+
+    @ui.button(label="Cancel", style=discord.ButtonStyle.grey)
+    async def cancel(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        assert self.view
+        await self.view._resolve(interaction, confirmed=False)
+
+
+class MapSubmissionReview(views.BaseLayoutView):
+    """Map submission preview with in-place level editing.
+
+    ``prompt()`` returns the final ``MapSubmission`` (including any level
+    edits) on confirm, or ``None`` on cancel/timeout.
+    """
+
+    def __init__(
+        self, itx: AkandeItx, sub: MapSubmission, *, timeout: float = 300.0
+    ) -> None:
+        super().__init__(itx, timeout=timeout)
+        self.sub = sub
+        self.result: MapSubmission | None = None
+        self._buttons = _ReviewButtons()
+        self._render(self._buttons)
+
+    def _render(self, footer: ui.Item) -> None:
+        self.clear_items()
+        body = [
+            ui.TextDisplay(item) if isinstance(item, str) else item
+            for item in map_submission_body(
+                self.sub, header="Map Submission - Is this correct?"
+            )
+        ]
+        self.add_item(ui.Container(*body, ui.Separator(), footer))
+
+    async def update_levels(self, itx: discord.Interaction, levels: list[str]) -> None:
+        """Swap the staged level list and re-render the preview in place."""
+        self.sub = structs.replace(self.sub, levels=levels)
+        self._render(self._buttons)
+        await itx.response.edit_message(view=self)
+
+    async def _resolve(self, itx: discord.Interaction, *, confirmed: bool) -> None:
+        self.result = self.sub if confirmed else None
+        self._render(ui.TextDisplay("✅ Confirmed" if confirmed else "❌ Cancelled"))
+        await itx.response.edit_message(view=self)
+        self.stop()
+
+    @classmethod
+    async def prompt(cls, itx: AkandeItx, sub: MapSubmission) -> MapSubmission | None:
+        view = cls(itx, sub)
+        if itx.response.is_done():
+            await itx.edit_original_response(view=view)
+        else:
+            await itx.response.send_message(view=view, ephemeral=True)
+        await view.wait()
+        return view.result
