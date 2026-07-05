@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import typing
 
+import aiohttp
 import discord
 import msgspec
 from discord import ui
@@ -12,9 +13,11 @@ from msgspec import structs
 from database.services import transaction
 from utilities import emojis, views
 from utilities.errors import UserFacingError
+from utilities.transformers import validate_url
 
 if typing.TYPE_CHECKING:
     from core import AkandeItx
+    from database import Services
     from database.services.maps import MapSearchResult, RandomMapResult
 
 __all__ = (
@@ -33,6 +36,10 @@ _LEVELS_DESCRIPTION = (
     "One level per line. Without individual levels, users cannot submit their times."
 )
 _LEVELS_MAX_LENGTH = 2000
+
+_GUIDE_WARNING = (
+    "⚠️ Guide URL is unreachable — fix it with Edit Guide or it will be skipped."
+)
 
 _OFFICIAL_BANNER = (
     "<:_:998055526468423700>"
@@ -154,6 +161,47 @@ class MapSubmission(msgspec.Struct, frozen=True):
     description: str
     levels: list[str]
     image_url: str | None
+    guide_url: str | None = None
+    guide_valid: bool = True
+
+
+def _drop_invalid_guide(sub: MapSubmission) -> MapSubmission:
+    """An announceable submission: an unreachable guide is removed, not shown."""
+    if sub.guide_valid:
+        return sub
+    return structs.replace(sub, guide_url=None, guide_valid=True)
+
+
+async def _validate_guide(
+    session: aiohttp.ClientSession, raw: str
+) -> tuple[str | None, bool]:
+    """Normalized guide URL and whether it answered; ``(None, True)`` if blank."""
+    raw = raw.strip()
+    if not raw:
+        return None, True
+    try:
+        return await validate_url(session, raw), True
+    except UserFacingError:
+        if not raw.startswith(("http://", "https://")):
+            raw = "https://" + raw
+        return raw, False
+
+
+async def _persist_submission(
+    svc: Services, sub: MapSubmission, *, creator_id: int
+) -> None:
+    """Write a confirmed submission; callers wrap this in a transaction."""
+    await svc.maps.create_map(
+        map_name=sub.map_name,
+        map_type=sub.map_types,
+        map_code=sub.map_code,
+        description=sub.description or None,
+        image=None,
+    )
+    await svc.maps.add_creator(sub.map_code, creator_id)
+    await svc.maps.add_levels(sub.map_code, sub.levels)
+    if sub.guide_url and sub.guide_valid:
+        await svc.maps.add_guide(sub.map_code, sub.guide_url)
 
 
 def map_submission_body(
@@ -168,13 +216,16 @@ def map_submission_body(
     Used by the confirm preview and the new-maps announcement.
     ``showcase_image=False`` renders the image as a small thumbnail beside
     the details; ``True`` renders it large in a gallery at the bottom.
-    ``include_levels=False`` omits the level list (the announcement card).
+    ``include_levels=False`` swaps the level list for a count in the details
+    (the announcement card).
     """
     details = (
         f"`Code` **{sub.map_code}**\n"
         f"`Map` {sub.map_name}\n"
         f"`Type` {', '.join(sub.map_types)}"
+        + ("" if include_levels else f"\n`Levels` {len(sub.levels)}")
         + (f"\n`Description` {sub.description}" if sub.description else "")
+        + (f"\n`Guide` {sub.guide_url}" if sub.guide_url else "")
     )
     detail_item: str | ui.Item = details
     if sub.image_url and not showcase_image:
@@ -187,6 +238,7 @@ def map_submission_body(
     return [
         f"## {header}",
         detail_item,
+        *((_GUIDE_WARNING,) if sub.guide_url and not sub.guide_valid else ()),
         *((ui.Separator(), _levels_display(sub.levels)) if include_levels else ()),
         *((gallery,) if showcase_image and sub.image_url else ()),
     ]
@@ -250,11 +302,27 @@ class MapSubmitModal(ui.Modal, title="Map Submission"):
             )
         )
 
+        self._guide = ui.TextInput(
+            required=False,
+            max_length=200,
+            placeholder="https://youtu.be/...",
+        )
+        self.add_item(
+            ui.Label(
+                text="Guide URL",
+                description="Optional link to a guide for this map.",
+                component=self._guide,
+            )
+        )
+
     @property
     def image(self) -> discord.Attachment | None:
         return self._screenshot.values[0] if self._screenshot.values else None
 
     async def on_submit(self, itx: AkandeItx) -> None:
+        guide_url, guide_valid = await _validate_guide(
+            itx.client.session, self._guide.value
+        )
         sub = MapSubmission(
             map_code=self.map_code,
             map_name=self.map_name,
@@ -262,23 +330,17 @@ class MapSubmitModal(ui.Modal, title="Map Submission"):
             description=self.description.value,
             levels=_parse_levels(self.levels.value),
             image_url=self.image.url if self.image else None,
+            guide_url=guide_url,
+            guide_valid=guide_valid,
         )
         final = await MapSubmissionReview.prompt(itx, sub)
         if final is None:
             return
 
         async with itx.client.acquire() as svc, transaction(svc.db):
-            await svc.maps.create_map(
-                map_name=final.map_name,
-                map_type=final.map_types,
-                map_code=final.map_code,
-                description=final.description or None,
-                image=None,
-            )
-            await svc.maps.add_creator(final.map_code, itx.user.id)
-            await svc.maps.add_levels(final.map_code, final.levels)
+            await _persist_submission(svc, final, creator_id=itx.user.id)
 
-        await self._announce(itx, final)
+        await self._announce(itx, _drop_invalid_guide(final))
 
     async def on_error(self, itx: AkandeItx, error: Exception) -> None:
         if isinstance(error, UserFacingError):
@@ -353,6 +415,37 @@ class _LevelEditModal(ui.Modal, title="Edit Levels"):
         await super().on_error(itx, error)
 
 
+class _GuideEditModal(ui.Modal, title="Edit Guide"):
+    """Fix or remove the staged guide URL; empty input clears it."""
+
+    def __init__(self, review: MapSubmissionReview) -> None:
+        super().__init__()
+        self._review = review
+        self.guide = ui.TextInput(
+            required=False,
+            max_length=200,
+            default=review.sub.guide_url or "",
+            placeholder="https://youtu.be/...",
+        )
+        self.add_item(
+            ui.Label(
+                text="Guide URL",
+                description="Leave empty to remove the guide.",
+                component=self.guide,
+            )
+        )
+
+    async def on_submit(self, itx: AkandeItx) -> None:
+        url, valid = await _validate_guide(itx.client.session, self.guide.value)
+        await self._review.update_guide(itx, url, valid=valid)
+
+    async def on_error(self, itx: AkandeItx, error: Exception) -> None:
+        if isinstance(error, UserFacingError):
+            await views.send_error(itx, str(error))
+            return
+        await super().on_error(itx, error)
+
+
 class _ReviewButtons(ui.ActionRow["MapSubmissionReview"]):
     @ui.button(label="Confirm", style=discord.ButtonStyle.green)
     async def confirm(
@@ -367,6 +460,13 @@ class _ReviewButtons(ui.ActionRow["MapSubmissionReview"]):
     ) -> None:
         assert self.view
         await interaction.response.send_modal(_LevelEditModal(self.view))
+
+    @ui.button(label="Edit Guide", style=discord.ButtonStyle.grey)
+    async def edit_guide(
+        self, interaction: discord.Interaction, button: ui.Button
+    ) -> None:
+        assert self.view
+        await interaction.response.send_modal(_GuideEditModal(self.view))
 
     @ui.button(label="Cancel", style=discord.ButtonStyle.grey)
     async def cancel(self, interaction: discord.Interaction, button: ui.Button) -> None:
@@ -403,6 +503,14 @@ class MapSubmissionReview(views.BaseLayoutView):
     async def update_levels(self, itx: discord.Interaction, levels: list[str]) -> None:
         """Swap the staged level list and re-render the preview in place."""
         self.sub = structs.replace(self.sub, levels=levels)
+        self._render(self._buttons)
+        await itx.response.edit_message(view=self)
+
+    async def update_guide(
+        self, itx: discord.Interaction, url: str | None, *, valid: bool
+    ) -> None:
+        """Swap the staged guide and re-render the preview in place."""
+        self.sub = structs.replace(self.sub, guide_url=url, guide_valid=valid)
         self._render(self._buttons)
         await itx.response.edit_message(view=self)
 
