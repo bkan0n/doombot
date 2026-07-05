@@ -29,6 +29,11 @@ dev = [
 
 [tool.basedpyright]
 typeCheckingMode = "basic"
+exclude = ["tests"]
+
+[tool.ruff]
+extend-exclude = ["tests"]
+force-exclude = true
 
 [tool.sqlspec]
 config = "database.config.config"
