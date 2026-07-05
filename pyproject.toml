@@ -30,6 +30,9 @@ dev = [
 [tool.basedpyright]
 typeCheckingMode = "basic"
 
+[tool.sqlspec]
+config = "database.config.config"
+
 
 [tool.sqlfluff.core]
 dialect = "postgres"

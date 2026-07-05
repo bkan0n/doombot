@@ -6,18 +6,10 @@ import signal
 import aiohttp
 from discord.utils import setup_logging
 from loguru import logger
-from sqlspec import SQLSpec
-from sqlspec.adapters.asyncpg import AsyncpgConfig
+from sqlspec.migrations import AsyncMigrationCommands
 
 import core
-
-spec = SQLSpec()
-config = spec.add_config(
-    AsyncpgConfig(
-        connection_config={"dsn": os.environ["DSN"]},
-        pool_config={"min_size": 1, "max_size": 5},
-    )
-)
+from database.config import config, spec
 
 
 class InterceptHandler(logging.Handler):
@@ -48,6 +40,7 @@ async def main() -> None:
     asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, task.cancel)
 
     await config.create_pool()
+    await AsyncMigrationCommands(config).upgrade()
     try:
         async with (
             aiohttp.ClientSession() as http,
