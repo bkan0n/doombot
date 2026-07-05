@@ -15,7 +15,7 @@ if typing.TYPE_CHECKING:
 
 
 class _TagModalBase(ui.Modal):
-    async def on_error(self, itx: AkandeItx, error: Exception) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def on_error(self, itx: AkandeItx, error: Exception) -> None:
         if isinstance(error, UserFacingError):
             await send_error(itx, str(error))
             return

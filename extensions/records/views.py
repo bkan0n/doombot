@@ -216,9 +216,7 @@ class RejectReasonModal(ui.Modal, title="Rejection Reason"):
     def __init__(self) -> None:
         super().__init__(timeout=600.0)
 
-    async def on_submit(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> None:
+    async def on_submit(self, itx: AkandeItx) -> None:
         await itx.response.send_message("Rejecting record...", ephemeral=True)
 
 
@@ -281,14 +279,12 @@ class StarButton(ui.DynamicItem[ui.Button], template=r"records-star:(?P<id>[0-9]
         )
 
     @classmethod
-    async def from_custom_id(  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def from_custom_id(
         cls, itx: AkandeItx, item: ui.Button, match: re.Match[str]
     ) -> StarButton:
         return cls(int(match["id"]))
 
-    async def callback(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> None:
+    async def callback(self, itx: AkandeItx) -> None:
         await itx.response.defer(ephemeral=True)
         assert itx.message
         async with itx.client.acquire() as svc:
@@ -397,9 +393,7 @@ async def _edit_original_message(
         sub, header="New Personal Record!", verifier=itx.user.mention, rejected=rejected
     )
     if not rejected:
-        # DynamicItem's view type is View | LayoutView, which pyright can't
-        # narrow to ActionRow's LayoutView-bound type parameter.
-        body.append(ui.ActionRow(StarButton(pending.message_id)))  # pyright: ignore[reportArgumentType]
+        body.append(ui.ActionRow(StarButton(pending.message_id))) # type: ignore
     try:
         await channel.get_partial_message(pending.message_id).edit(view=Card(body))
     except discord.HTTPException as e:

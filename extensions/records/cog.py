@@ -7,6 +7,7 @@ import typing
 import discord
 from discord import app_commands, ui
 from discord.ext import commands
+from discord.ui.view import LayoutView
 from loguru import logger
 from msgspec import structs
 
@@ -111,9 +112,8 @@ class RecordsCog(BaseCog, name="records", description="Record related commands."
             screenshot_url="attachment://image.png" if screenshot else None,
         )
         body = record_views.submission_body(sub, header="New Personal Record!")
-        # DynamicItem's view type is View | LayoutView, which pyright can't
-        # narrow to ActionRow's LayoutView-bound type parameter.
-        body.append(ui.ActionRow(record_views.StarButton(message.id, count)))  # pyright: ignore[reportArgumentType]
+        star_button = record_views.StarButton(message.id, count)
+        body.append(ui.ActionRow(star_button))  # type: ignore
         try:
             await message.edit(
                 content=None,

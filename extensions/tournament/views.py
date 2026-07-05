@@ -182,9 +182,7 @@ class _MissionRemoveButton(ui.Button["MissionRemoveView"]):
         super().__init__(label="Remove", style=discord.ButtonStyle.red)
         self._mission = mission
 
-    async def callback(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> None:
+    async def callback(self, itx: AkandeItx) -> None:
         assert self.view
         await self.view.remove(itx, self._mission)
 
@@ -349,9 +347,7 @@ class MapEntryModal(ui.Modal, title="Tournament Map"):
         self._wizard = wizard
         self._category = category
 
-    async def on_submit(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> None:
+    async def on_submit(self, itx: AkandeItx) -> None:
         self._wizard.maps[self._category] = MapEntry(
             code=self.code.value.upper().strip(),
             level=self.level.value.strip(),
@@ -449,9 +445,7 @@ class _RolePingSelect(ui.Select["RolePingPrompt"]):
             options=[discord.SelectOption(label=x, value=x) for x in _PINGABLE],
         )
 
-    async def callback(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> None:
+    async def callback(self, itx: AkandeItx) -> None:
         await itx.response.defer()
 
 
@@ -540,9 +534,7 @@ class AnnouncementModal(ui.Modal, title="Tournament Announcement"):
             )
         )
 
-    async def on_submit(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> None:
+    async def on_submit(self, itx: AkandeItx) -> None:
         self.itx = itx
         # thinking=True: a modal opened from a slash command has no message,
         # so a plain defer() leaves nothing for edit_original_response to edit.
@@ -559,9 +551,7 @@ class AddSeasonModal(ui.Modal, title="Add New Season"):
         super().__init__(timeout=300.0)
         self._manager = manager
 
-    async def on_submit(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> None:
+    async def on_submit(self, itx: AkandeItx) -> None:
         async with itx.client.acquire() as svc:
             await svc.tournament.create_season(self.name.value)
             self._manager.seasons = await svc.tournament.fetch_seasons()
@@ -583,9 +573,7 @@ class _SeasonSelect(ui.Select["SeasonManagerView"]):
             ],
         )
 
-    async def callback(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> None:
+    async def callback(self, itx: AkandeItx) -> None:
         assert self.view
         self.view.selected = int(self.values[0])
         await itx.response.defer()
@@ -718,9 +706,7 @@ class _InfoButton(ui.Button["InfoPanelView"]):
         super().__init__(label=key, custom_id=f"tournament-info-button{slug}")
         self._page = page
 
-    async def callback(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> None:
+    async def callback(self, itx: AkandeItx) -> None:
         await itx.response.send_message(view=views.Card([self._page]), ephemeral=True)
 
 

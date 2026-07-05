@@ -222,9 +222,7 @@ class MapSubmitModal(ui.Modal, title="Map Submission"):
     def image(self) -> discord.Attachment | None:
         return self._screenshot.values[0] if self._screenshot.values else None
 
-    async def on_submit(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx
-    ) -> None:
+    async def on_submit(self, itx: AkandeItx) -> None:
         levels = list(
             dict.fromkeys(
                 stripped
@@ -263,9 +261,7 @@ class MapSubmitModal(ui.Modal, title="Map Submission"):
 
         await self._announce(itx, sub)
 
-    async def on_error(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, itx: AkandeItx, error: Exception
-    ) -> None:
+    async def on_error(self, itx: AkandeItx, error: Exception) -> None:
         if isinstance(error, UserFacingError):
             await views.send_error(itx, str(error))
             return
