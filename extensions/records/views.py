@@ -393,7 +393,7 @@ async def _edit_original_message(
         sub, header="New Personal Record!", verifier=itx.user.mention, rejected=rejected
     )
     if not rejected:
-        body.append(ui.ActionRow(StarButton(pending.message_id))) # type: ignore
+        body.append(ui.ActionRow(StarButton(pending.message_id)))  # type: ignore
     try:
         await channel.get_partial_message(pending.message_id).edit(view=Card(body))
     except discord.HTTPException as e:

@@ -7,7 +7,6 @@ import typing
 import discord
 from discord import app_commands, ui
 from discord.ext import commands
-from discord.ui.view import LayoutView
 from loguru import logger
 from msgspec import structs
 
