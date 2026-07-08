@@ -452,7 +452,12 @@ class MapService(Service):
             SELECT level
             FROM map_levels
             WHERE map_code = :map_code
-            ORDER BY SIMILARITY(level, :search) DESC
+            -- pg_trgm strips punctuation, so "Advanced" and "Advanced+" tie at
+            -- similarity 1.0; prefer the exact match and break ties by name.
+            ORDER BY
+              LOWER(level) = LOWER(:search) DESC,
+              SIMILARITY(level, :search) DESC,
+              level
             LIMIT 1;
         """
         return await self._db.select_value_or_none(
@@ -466,7 +471,10 @@ class MapService(Service):
             SELECT level
             FROM map_levels
             WHERE map_code = :map_code
-            ORDER BY SIMILARITY(level, :search) DESC, level
+            ORDER BY
+              LOWER(level) = LOWER(:search) DESC,
+              SIMILARITY(level, :search) DESC,
+              level
             LIMIT :limit;
         """
         rows = await self._db.select(
